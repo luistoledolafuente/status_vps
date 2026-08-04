@@ -146,25 +146,33 @@ export function ServiceStatusList({ response, loading, compact = false }) {
 
       {response?.available ? (
         <>
-          <div className="mb-3 flex flex-wrap items-center gap-2">
-            <ToggleButtonGroup
-              size="sm"
-              selectionMode="single"
-              disallowEmptySelection
-              selectedKeys={[filter]}
-              onSelectionChange={(keys) => {
-                const key = [...keys][0];
-                if (key) setFilter(String(key));
-              }}
+          <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+            <div className="order-1 -mx-1 overflow-x-auto rounded-xl px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:order-none sm:mx-0 sm:px-0 sm:pb-0">
+              <ToggleButtonGroup
+                size="sm"
+                selectionMode="single"
+                disallowEmptySelection
+                selectedKeys={[filter]}
+                onSelectionChange={(keys) => {
+                  const key = [...keys][0];
+                  if (key) setFilter(String(key));
+                }}
+              >
+                {FILTERS.map((option, index) => (
+                  <ToggleButton key={option.value} id={option.value}>
+                    {index > 0 ? <ToggleButtonGroup.Separator /> : null}
+                    {option.label}
+                  </ToggleButton>
+                ))}
+              </ToggleButtonGroup>
+            </div>
+            <SearchField
+              aria-label="Buscar servicio"
+              value={query}
+              onChange={setQuery}
+              fullWidth
+              className="order-2 sm:order-none sm:min-w-0 sm:flex-1"
             >
-              {FILTERS.map((option, index) => (
-                <ToggleButton key={option.value} id={option.value}>
-                  {index > 0 ? <ToggleButtonGroup.Separator /> : null}
-                  {option.label}
-                </ToggleButton>
-              ))}
-            </ToggleButtonGroup>
-            <SearchField aria-label="Buscar servicio" value={query} onChange={setQuery} className="min-w-0 flex-1">
               <SearchField.Group>
                 <SearchField.SearchIcon />
                 <SearchField.Input placeholder="Buscar servicio…" />

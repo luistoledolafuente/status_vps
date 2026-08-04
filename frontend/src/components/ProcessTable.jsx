@@ -37,23 +37,25 @@ export function ProcessTable({ processes = [], loading, sortBy, onSortChange, se
   }, [processes, query]);
 
   const sortButtons = (
-    <ToggleButtonGroup
-      size="sm"
-      selectionMode="single"
-      disallowEmptySelection
-      selectedKeys={[sortBy]}
-      onSelectionChange={(keys) => {
-        const key = [...keys][0];
-        if (key) onSortChange(String(key));
-      }}
-    >
-      {SORT_OPTIONS.map((option, index) => (
-        <ToggleButton key={option.value} id={option.value}>
-          {index > 0 ? <ToggleButtonGroup.Separator /> : null}
-          {option.label}
-        </ToggleButton>
-      ))}
-    </ToggleButtonGroup>
+    <div className="-mx-1 overflow-x-auto rounded-xl px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <ToggleButtonGroup
+        size="sm"
+        selectionMode="single"
+        disallowEmptySelection
+        selectedKeys={[sortBy]}
+        onSelectionChange={(keys) => {
+          const key = [...keys][0];
+          if (key) onSortChange(String(key));
+        }}
+      >
+        {SORT_OPTIONS.map((option, index) => (
+          <ToggleButton key={option.value} id={option.value}>
+            {index > 0 ? <ToggleButtonGroup.Separator /> : null}
+            {option.label}
+          </ToggleButton>
+        ))}
+      </ToggleButtonGroup>
+    </div>
   );
 
   return (

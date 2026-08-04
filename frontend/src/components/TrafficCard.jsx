@@ -77,7 +77,7 @@ export function TrafficCard({ traffic, network }) {
         </p>
       )}
 
-      <div className="mt-4 flex gap-4 border-t border-separator pt-3 text-xs text-muted">
+      <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1 border-t border-separator pt-3 text-xs text-muted">
         <span>
           <span className="text-muted">Descarga actual: </span>
           <span className="font-data font-semibold text-sky-600">

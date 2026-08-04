@@ -100,20 +100,22 @@ export function AppHeader({ tab, onTabChange, wsStatus, wsAttempts, lastUpdated,
       </div>
 
       <div className="mx-auto max-w-7xl px-4 sm:px-6">
-        <Tabs
-          aria-label="Secciones"
-          variant="secondary"
-          selectedKey={tab}
-          onSelectionChange={(key) => onTabChange(String(key))}
-        >
-          <Tabs.List>
-            {TABS.map((item) => (
-              <Tabs.Tab key={item.id} id={item.id}>
-                {item.label}
-              </Tabs.Tab>
-            ))}
-          </Tabs.List>
-        </Tabs>
+        <div className="overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <Tabs
+            aria-label="Secciones"
+            variant="secondary"
+            selectedKey={tab}
+            onSelectionChange={(key) => onTabChange(String(key))}
+          >
+            <Tabs.List>
+              {TABS.map((item) => (
+                <Tabs.Tab key={item.id} id={item.id}>
+                  {item.label}
+                </Tabs.Tab>
+              ))}
+            </Tabs.List>
+          </Tabs>
+        </div>
       </div>
     </header>
   );
