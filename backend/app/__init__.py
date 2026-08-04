@@ -1,0 +1,1 @@
+"""Aplicación System Status (backend FastAPI)."""

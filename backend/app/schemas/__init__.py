@@ -1,0 +1,1 @@
+"""Esquemas (DTO) compartidos."""
