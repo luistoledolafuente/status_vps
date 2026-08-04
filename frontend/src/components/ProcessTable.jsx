@@ -1,6 +1,7 @@
 // Process table: top processes by CPU or memory, with search and pagination.
 
 import { useEffect, useMemo, useState } from "react";
+import { Button, SearchField, Table, ToggleButton, ToggleButtonGroup } from "@heroui/react";
 import { Card } from "./ui/Card";
 import { EmptyState } from "./ui/EmptyState";
 import { Skeleton } from "./ui/Skeleton";
@@ -36,22 +37,23 @@ export function ProcessTable({ processes = [], loading, sortBy, onSortChange, se
   }, [processes, query]);
 
   const sortButtons = (
-    <div className="flex items-center gap-2">
-      {SORT_OPTIONS.map((option) => (
-        <button
-          key={option.value}
-          type="button"
-          onClick={() => onSortChange(option.value)}
-          className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-            sortBy === option.value
-              ? "bg-teal-600 text-white"
-              : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-          }`}
-        >
+    <ToggleButtonGroup
+      size="sm"
+      selectionMode="single"
+      disallowEmptySelection
+      selectedKeys={[sortBy]}
+      onSelectionChange={(keys) => {
+        const key = [...keys][0];
+        if (key) onSortChange(String(key));
+      }}
+    >
+      {SORT_OPTIONS.map((option, index) => (
+        <ToggleButton key={option.value} id={option.value}>
+          {index > 0 ? <ToggleButtonGroup.Separator /> : null}
           {option.label}
-        </button>
+        </ToggleButton>
       ))}
-    </div>
+    </ToggleButtonGroup>
   );
 
   return (
@@ -62,13 +64,13 @@ export function ProcessTable({ processes = [], loading, sortBy, onSortChange, se
     >
       {searchable ? (
         <div className="mb-3">
-          <input
-            type="search"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Buscar proceso o usuario…"
-            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2 text-sm text-slate-700 placeholder:text-slate-400 focus:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-100"
-          />
+          <SearchField aria-label="Buscar proceso o usuario" value={query} onChange={setQuery} fullWidth>
+            <SearchField.Group>
+              <SearchField.SearchIcon />
+              <SearchField.Input placeholder="Buscar proceso o usuario…" />
+              <SearchField.ClearButton />
+            </SearchField.Group>
+          </SearchField>
         </div>
       ) : null}
 
@@ -81,50 +83,55 @@ export function ProcessTable({ processes = [], loading, sortBy, onSortChange, se
         />
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[480px] text-left text-sm">
-            <thead>
-              <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-400">
-                <th className="pb-2 pr-2 font-medium">Proceso</th>
-                <th className="pb-2 pr-2 font-medium">PID</th>
-                <th className="hidden pb-2 pr-2 font-medium sm:table-cell">Estado</th>
-                <th className="pb-2 pr-2 text-right font-medium">CPU</th>
-                <th className="pb-2 text-right font-medium">Memoria</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.slice(0, visible).map((process) => (
-                <tr key={process.pid} className="border-b border-slate-100 transition-colors last:border-0 hover:bg-slate-50">
-                  <td className="py-2.5 pr-2">
-                    <p className="font-medium text-slate-800">{process.name}</p>
-                    <p className="text-xs text-slate-400">{process.username}</p>
-                  </td>
-                  <td className="font-data py-2.5 pr-2 text-slate-600">{process.pid}</td>
-                  <td className="hidden py-2.5 pr-2 sm:table-cell">
-                    <span className="text-xs text-slate-500">
-                      {STATUS_LABELS[process.status] ?? process.status}
-                    </span>
-                  </td>
-                  <td className="font-data py-2.5 pr-2 text-right">
-                    <span className={`${process.cpu_percent > 50 ? "text-rose-600" : "text-slate-700"}`}>
-                      {formatPercent(process.cpu_percent, 1)}
-                    </span>
-                  </td>
-                  <td className="font-data py-2.5 text-right text-slate-700">{formatBytes(process.memory_rss_bytes, 0)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <Table variant="secondary">
+            <Table.ScrollContainer>
+              <Table.Content aria-label="Procesos del sistema">
+                <Table.Header>
+                  <Table.Column isRowHeader>Proceso</Table.Column>
+                  <Table.Column>PID</Table.Column>
+                  <Table.Column className="hidden sm:table-cell">Estado</Table.Column>
+                  <Table.Column className="text-right">CPU</Table.Column>
+                  <Table.Column className="text-right">Memoria</Table.Column>
+                </Table.Header>
+                <Table.Body items={filtered.slice(0, visible)} renderEmptyState={() => null}>
+                  {(process) => (
+                    <Table.Row key={process.pid} id={process.pid}>
+                      <Table.Cell>
+                        <p className="font-medium text-foreground">{process.name}</p>
+                        <p className="text-xs text-muted">{process.username}</p>
+                      </Table.Cell>
+                      <Table.Cell className="font-data text-muted">{process.pid}</Table.Cell>
+                      <Table.Cell className="hidden sm:table-cell">
+                        <span className="text-xs text-muted">
+                          {STATUS_LABELS[process.status] ?? process.status}
+                        </span>
+                      </Table.Cell>
+                      <Table.Cell className="font-data text-right">
+                        <span className={process.cpu_percent > 50 ? "text-danger" : "text-foreground"}>
+                          {formatPercent(process.cpu_percent, 1)}
+                        </span>
+                      </Table.Cell>
+                      <Table.Cell className="font-data text-right text-foreground">
+                        {formatBytes(process.memory_rss_bytes, 0)}
+                      </Table.Cell>
+                    </Table.Row>
+                  )}
+                </Table.Body>
+              </Table.Content>
+            </Table.ScrollContainer>
+          </Table>
         </div>
       )}
 
       {filtered.length > visible ? (
-        <button
-          type="button"
-          onClick={() => setVisible((count) => count + 5)}
-          className="mt-3 w-full rounded-xl bg-slate-100 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-200"
+        <Button
+          fullWidth
+          variant="secondary"
+          className="mt-3"
+          onPress={() => setVisible((count) => count + 5)}
         >
           Ver más procesos
-        </button>
+        </Button>
       ) : null}
     </Card>
   );

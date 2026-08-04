@@ -1,15 +1,19 @@
+/* Fuentes de la marca: deben preceder a los @import de Tailwind/HeroUI. */
 @import url("https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Fira+Sans:wght@300;400;500;600;700&display=swap");
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* Tailwind CSS v4 - Must be first */
+@import "tailwindcss";
+/* HeroUI v3 styles - Must be after Tailwind */
+@import "@heroui/styles";
 
-:root {
-  color-scheme: light;
+/* Tipografía de la marca: Fira Sans (UI) y Fira Code (datos). */
+@theme {
+  --font-sans: "Fira Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "Fira Code", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
 }
 
 body {
-  @apply bg-slate-100 text-slate-800 antialiased;
+  @apply bg-background text-foreground antialiased;
 }
 
 /* Tipografía de datos: números siempre en Fira Code. */
@@ -36,19 +40,12 @@ body {
 
 /* Foco visible para navegación por teclado. */
 :focus-visible {
-  @apply outline-2 outline-offset-2 outline-teal-600;
+  @apply outline-2 outline-offset-2 outline-accent;
 }
 
-/* Scrollbar discreto. */
-*::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-*::-webkit-scrollbar-thumb {
-  @apply rounded-full bg-slate-300;
-}
-*::-webkit-scrollbar-track {
-  background: transparent;
+/* Círculo grande de "Salud del servidor": agranda el track del ProgressCircle. */
+.health-score .progress-circle__track {
+  @apply size-24;
 }
 
 @media (prefers-reduced-motion: reduce) {

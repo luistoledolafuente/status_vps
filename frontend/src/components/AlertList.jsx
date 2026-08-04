@@ -15,22 +15,22 @@ const SEVERITY_VARIANT = {
 function AlertRow({ alert }) {
   const resolved = alert.state === "resolved";
   return (
-    <li className={`flex flex-col gap-2 px-4 py-3 transition-colors hover:bg-slate-50 ${resolved ? "opacity-70" : ""}`}>
+    <li className={`flex flex-col gap-2 px-4 py-3 transition-colors hover:bg-surface-secondary ${resolved ? "opacity-70" : ""}`}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <Badge variant={SEVERITY_VARIANT[alert.severity] ?? "info"}>
             {alert.severity === "critical" ? "Crítico" : alert.severity === "warning" ? "Aviso" : "Info"}
           </Badge>
-          <p className="text-sm font-semibold text-slate-800">{alert.title}</p>
+          <p className="text-sm font-semibold text-foreground">{alert.title}</p>
         </div>
-        <span className="font-data text-xs text-slate-400">
+        <span className="font-data text-xs text-muted">
           {formatDateTime(alert.last_seen)}
           {resolved ? ` · resuelta ${formatDateTime(alert.resolved_at)}` : ""}
         </span>
       </div>
-      <p className="text-sm text-slate-600">{alert.message}</p>
-      <p className="text-xs text-slate-500">
-        <span className="font-medium">Sugerencia: </span>
+      <p className="text-sm text-muted">{alert.message}</p>
+      <p className="text-xs text-muted">
+        <span className="font-medium text-foreground">Sugerencia: </span>
         {alert.tip}
       </p>
     </li>
@@ -88,10 +88,10 @@ export function AlertList({ response, loading }) {
         />
       ) : (
         <div className="mb-2">
-          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-400">
+          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">
             Activas ({active.length})
           </p>
-          <ul className="divide-y divide-slate-100 rounded-xl bg-rose-50/40 ring-1 ring-rose-100">
+          <ul className="divide-y divide-separator rounded-xl bg-danger-soft ring-1 ring-danger/20">
             {active.map((alert) => (
               <AlertRow key={alert.key} alert={alert} />
             ))}
@@ -101,10 +101,10 @@ export function AlertList({ response, loading }) {
 
       {resolved.length > 0 ? (
         <div>
-          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-400">
+          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">
             Resueltas recientemente ({resolved.length})
           </p>
-          <ul className="divide-y divide-slate-100 rounded-xl ring-1 ring-slate-100">
+          <ul className="divide-y divide-separator rounded-xl ring-1 ring-border-secondary">
             {resolved.map((alert) => (
               <AlertRow key={alert.key} alert={alert} />
             ))}

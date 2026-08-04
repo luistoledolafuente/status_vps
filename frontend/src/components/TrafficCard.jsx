@@ -1,6 +1,7 @@
 // Monthly traffic card: transfer used this month vs. the plan quota,
 // with current up/down rates underneath.
 
+import { Chip, ProgressBar } from "@heroui/react";
 import { Card } from "./ui/Card";
 import { formatBitsPerSecond, formatBytes } from "../utils/format";
 
@@ -14,17 +15,17 @@ function monthLabel(month) {
   });
 }
 
-function quotaGradient(percent) {
-  if (percent >= 95) return "bg-rose-500";
-  if (percent >= 80) return "bg-amber-500";
-  return "bg-teal-500";
+function quotaColor(percent) {
+  if (percent >= 95) return "danger";
+  if (percent >= 80) return "warning";
+  return "accent";
 }
 
 export function TrafficCard({ traffic, network }) {
   if (!traffic) {
     return (
       <Card title="Tráfico mensual" subtitle="Transferencia del mes en curso">
-        <p className="text-sm text-slate-500">Recopilando datos de tráfico…</p>
+        <p className="text-sm text-muted">Recopilando datos de tráfico…</p>
       </Card>
     );
   }
@@ -39,18 +40,18 @@ export function TrafficCard({ traffic, network }) {
       subtitle={`Transferencia del mes · ${monthLabel(traffic.month)}`}
       actions={
         hasQuota ? (
-          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600 ring-1 ring-slate-200">
+          <Chip variant="soft" size="sm">
             Cuota: {formatBytes(quotaBytes, 0)}
-          </span>
+          </Chip>
         ) : null
       }
     >
       <div className="flex items-baseline gap-1.5">
-        <span className="font-data text-3xl font-semibold tracking-tight text-slate-900">
+        <span className="font-data text-3xl font-semibold tracking-tight text-foreground">
           {formatBytes(traffic.total_bytes, 2)}
         </span>
         {hasQuota ? (
-          <span className="font-data text-sm font-medium text-slate-400">
+          <span className="font-data text-sm font-medium text-muted">
             de {formatBytes(quotaBytes, 0)}
           </span>
         ) : null}
@@ -58,32 +59,33 @@ export function TrafficCard({ traffic, network }) {
 
       {hasQuota ? (
         <div className="mt-3">
-          <div className="flex items-center justify-between text-xs text-slate-500">
+          <div className="flex items-center justify-between text-xs text-muted">
             <span>{formatBytes(traffic.sent_bytes, 1)} enviados · {formatBytes(traffic.recv_bytes, 1)} recibidos</span>
-            <span className="font-data font-semibold text-slate-700">{percent.toFixed(1)}%</span>
+            <span className="font-data font-semibold text-foreground">{percent.toFixed(1)}%</span>
           </div>
-          <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
-            <div
-              className={`h-full rounded-full ${quotaGradient(percent)} transition-[width] duration-500`}
-              style={{ width: `${Math.min(Math.max(percent, 0), 100)}%` }}
-            />
-          </div>
+          <ProgressBar
+            className="mt-1.5"
+            aria-label={`Uso de cuota de tráfico: ${percent.toFixed(1)}%`}
+            value={percent}
+            color={quotaColor(percent)}
+            size="sm"
+          />
         </div>
       ) : (
-        <p className="mt-1 text-xs text-slate-500">
+        <p className="mt-1 text-xs text-muted">
           {formatBytes(traffic.sent_bytes, 1)} enviados · {formatBytes(traffic.recv_bytes, 1)} recibidos
         </p>
       )}
 
-      <div className="mt-4 flex gap-4 border-t border-slate-100 pt-3 text-xs text-slate-500">
+      <div className="mt-4 flex gap-4 border-t border-separator pt-3 text-xs text-muted">
         <span>
-          <span className="text-slate-400">Descarga actual: </span>
+          <span className="text-muted">Descarga actual: </span>
           <span className="font-data font-semibold text-sky-600">
             {network?.recv_bps != null ? formatBitsPerSecond(network.recv_bps) : "—"}
           </span>
         </span>
         <span>
-          <span className="text-slate-400">Subida actual: </span>
+          <span className="text-muted">Subida actual: </span>
           <span className="font-data font-semibold text-violet-600">
             {network?.sent_bps != null ? formatBitsPerSecond(network.sent_bps) : "—"}
           </span>

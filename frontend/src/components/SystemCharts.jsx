@@ -19,18 +19,30 @@ import { formatBitsPerSecond, formatBytes, formatTime } from "../utils/format";
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Tooltip, Legend, Filler);
 
-const baseOptions = {
-  responsive: true,
-  maintainAspectRatio: false,
-  animation: false,
-  interaction: { mode: "index", intersect: false },
-  plugins: {
-    legend: { position: "bottom", labels: { usePointStyle: true, boxWidth: 8 } },
-  },
-};
+function cssVar(name, fallback) {
+  if (typeof window === "undefined") return fallback;
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
+}
+
+function makeBaseOptions() {
+  const tick = cssVar("--muted", "#94a3b8");
+  const grid = cssVar("--border", "#e2e8f0");
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: false,
+    interaction: { mode: "index", intersect: false },
+    color: tick,
+    plugins: {
+      legend: { position: "bottom", labels: { usePointStyle: true, boxWidth: 8, color: tick } },
+    },
+    grid: { color: grid },
+  };
+}
 
 function TrendChart({ history }) {
   const hasData = history.length >= 2;
+  const base = makeBaseOptions();
   const data = {
     labels: history.map((point) => formatTime(point.at)),
     datasets: [
@@ -64,13 +76,13 @@ function TrendChart({ history }) {
     ],
   };
   const options = {
-    ...baseOptions,
+    ...base,
     scales: {
       x: { grid: { display: false }, ticks: { maxTicksLimit: 8, maxRotation: 0 } },
-      y: { beginAtZero: true, max: 100, title: { display: true, text: "% de uso" } },
+      y: { beginAtZero: true, max: 100, title: { display: true, text: "% de uso" }, grid: { color: base.grid.color } },
     },
     plugins: {
-      ...baseOptions.plugins,
+      ...base.plugins,
       tooltip: {
         callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(1)}%` },
       },
@@ -87,6 +99,7 @@ function TrendChart({ history }) {
 
 function DiskChart({ disks }) {
   const items = disks ?? [];
+  const base = makeBaseOptions();
   const data = {
     labels: items.map((disk) => (disk.is_root ? `${disk.mountpoint} (raíz)` : disk.mountpoint)),
     datasets: [
@@ -99,14 +112,14 @@ function DiskChart({ disks }) {
     ],
   };
   const options = {
-    ...baseOptions,
+    ...base,
     indexAxis: "y",
     scales: {
-      x: { beginAtZero: true, max: 100, title: { display: true, text: "% usado" } },
+      x: { beginAtZero: true, max: 100, title: { display: true, text: "% usado" }, grid: { color: base.grid.color } },
       y: { grid: { display: false } },
     },
     plugins: {
-      ...baseOptions.plugins,
+      ...base.plugins,
       tooltip: {
         callbacks: {
           label: (ctx) => {
@@ -128,6 +141,7 @@ function DiskChart({ disks }) {
 
 function NetworkChart({ history }) {
   const hasData = history.some((point) => point.sentBps > 0 || point.recvBps > 0);
+  const base = makeBaseOptions();
   const data = {
     labels: history.map((point) => formatTime(point.at)),
     datasets: [
@@ -152,13 +166,13 @@ function NetworkChart({ history }) {
     ],
   };
   const options = {
-    ...baseOptions,
+    ...base,
     scales: {
       x: { grid: { display: false }, ticks: { maxTicksLimit: 8, maxRotation: 0 } },
-      y: { beginAtZero: true, title: { display: true, text: "Velocidad" } },
+      y: { beginAtZero: true, title: { display: true, text: "Velocidad" }, grid: { color: base.grid.color } },
     },
     plugins: {
-      ...baseOptions.plugins,
+      ...base.plugins,
       tooltip: {
         callbacks: { label: (ctx) => `${ctx.dataset.label}: ${formatBitsPerSecond(ctx.parsed.y)}` },
       },

@@ -1,5 +1,6 @@
 // KPI grid: CPU, memory, disk, network and uptime cards with severity colors.
 
+import { Skeleton } from "@heroui/react";
 import { MetricCard } from "./MetricCard";
 import { formatBitsPerSecond, formatBytes, formatPercent, formatUptime, maxDiskPercent, pickMainDisk } from "../utils/format";
 
@@ -53,7 +54,7 @@ export function KPIGrid({ summary, loading }) {
     return (
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
         {[0, 1, 2, 3, 4].map((index) => (
-          <div key={index} className="h-36 animate-pulse rounded-2xl bg-slate-200 ring-1 ring-slate-200" />
+          <Skeleton key={index} className="h-36 rounded-2xl" animationType="pulse" />
         ))}
       </div>
     );

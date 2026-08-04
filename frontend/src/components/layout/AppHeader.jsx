@@ -1,5 +1,6 @@
 // Top navigation: branding, tabs and live WebSocket connection status.
 
+import { Button, Chip, Tabs } from "@heroui/react";
 import { StatusDot } from "../ui/StatusDot";
 
 const TABS = [
@@ -18,11 +19,11 @@ function ConnectionStatus({ wsStatus, wsAttempts, lastUpdated }) {
   };
   return (
     <div
-      className="inline-flex items-center gap-2 rounded-xl bg-slate-100 px-3 py-1.5"
+      className="inline-flex items-center gap-2 rounded-xl bg-surface-secondary px-3 py-1.5"
       title={lastUpdated ? `Último dato: ${lastUpdated.toLocaleTimeString("es-ES")}` : undefined}
     >
       <StatusDot state={wsStatus} label={labels[wsStatus] ?? labels.disconnected} />
-      <span className="font-data text-[11px] text-slate-400">
+      <span className="font-data text-[11px] text-muted">
         {lastUpdated ? lastUpdated.toLocaleTimeString("es-ES") : "—"}
       </span>
     </div>
@@ -31,16 +32,50 @@ function ConnectionStatus({ wsStatus, wsAttempts, lastUpdated }) {
 
 function LiveBadge() {
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full bg-teal-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-teal-700 ring-1 ring-teal-200">
-      <span className="h-1.5 w-1.5 rounded-full bg-teal-500 status-pulse" />
+    <Chip color="success" variant="soft" size="sm">
+      <span className="h-1.5 w-1.5 rounded-full bg-success status-pulse" />
       En vivo
-    </span>
+    </Chip>
   );
 }
 
-export function AppHeader({ tab, onTabChange, wsStatus, wsAttempts, lastUpdated }) {
+function SunIcon() {
   return (
-    <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/95 backdrop-blur">
+    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+    </svg>
+  );
+}
+
+function MoonIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+    </svg>
+  );
+}
+
+function ThemeToggle({ theme, onThemeChange }) {
+  const isDark = theme === "dark";
+  const label = isDark ? "Cambiar a tema claro" : "Cambiar a tema oscuro";
+  return (
+    <Button
+      isIconOnly
+      variant="secondary"
+      size="sm"
+      aria-label={label}
+      title={label}
+      onPress={() => onThemeChange(isDark ? "light" : "dark")}
+    >
+      {isDark ? <SunIcon /> : <MoonIcon />}
+    </Button>
+  );
+}
+
+export function AppHeader({ tab, onTabChange, wsStatus, wsAttempts, lastUpdated, theme, onThemeChange }) {
+  return (
+    <header className="sticky top-0 z-10 border-b border-border bg-surface/95 backdrop-blur">
       <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-teal-500 to-cyan-600 text-white shadow-sm">
@@ -51,37 +86,35 @@ export function AppHeader({ tab, onTabChange, wsStatus, wsAttempts, lastUpdated 
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-lg font-bold text-slate-900">Monitor del Servidor</h1>
+              <h1 className="text-lg font-bold text-foreground">Monitor del Servidor</h1>
               <LiveBadge />
             </div>
-            <p className="text-xs text-slate-500">Métricas en tiempo real por WebSocket</p>
+            <p className="text-xs text-muted">Métricas en tiempo real por WebSocket</p>
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
           <ConnectionStatus wsStatus={wsStatus} wsAttempts={wsAttempts} lastUpdated={lastUpdated} />
+          <ThemeToggle theme={theme} onThemeChange={onThemeChange} />
         </div>
       </div>
 
-      <nav className="mx-auto max-w-7xl px-4 sm:px-6" aria-label="Secciones">
-        <div className="flex gap-1 overflow-x-auto">
-          {TABS.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => onTabChange(item.id)}
-              aria-current={tab === item.id ? "page" : undefined}
-              className={`border-b-2 px-3 py-2.5 text-sm font-medium transition-colors ${
-                tab === item.id
-                  ? "border-teal-600 text-teal-700"
-                  : "border-transparent text-slate-500 hover:text-slate-700"
-              }`}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
-      </nav>
+      <div className="mx-auto max-w-7xl px-4 sm:px-6">
+        <Tabs
+          aria-label="Secciones"
+          variant="secondary"
+          selectedKey={tab}
+          onSelectionChange={(key) => onTabChange(String(key))}
+        >
+          <Tabs.List>
+            {TABS.map((item) => (
+              <Tabs.Tab key={item.id} id={item.id}>
+                {item.label}
+              </Tabs.Tab>
+            ))}
+          </Tabs.List>
+        </Tabs>
+      </div>
     </header>
   );
 }
