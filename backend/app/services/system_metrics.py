@@ -1,8 +1,8 @@
-"""Recolección de métricas del sistema con psutil.
+"""System metrics collection with psutil.
 
-Todas las funciones son defensivas: si algo falla (permisos, plataforma,
-procesos que mueren a mitad de lectura) se degrada de forma controlada en
-lugar de romper el endpoint.
+All functions are defensive: if something fails (permissions, platform,
+processes dying mid-read) they degrade gracefully instead of breaking the
+endpoint. Each getter returns plain dicts that the collector wraps.
 """
 
 import os
@@ -19,18 +19,25 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _hostname() -> str:
+def get_hostname() -> str:
     try:
         return socket.gethostname()
     except OSError:
         return "unknown"
 
 
-def get_cpu_info() -> dict:
-    """Uso de CPU y número de núcleos.
+def get_platform() -> str:
+    try:
+        return platform.platform()
+    except OSError:
+        return "unknown"
 
-    psutil devuelve 0.0 en la primera llamada de calibración; con un
-    intervalo corto obtenemos una lectura real sin penalizar la latencia.
+
+def get_cpu_info() -> dict:
+    """CPU usage and core counts.
+
+    psutil returns 0.0 on the first call (calibration); a short interval
+    yields a real reading with negligible latency.
     """
     return {
         "percent": psutil.cpu_percent(interval=0.2),
@@ -50,7 +57,7 @@ def get_memory_info() -> dict:
 
 
 def get_disks() -> list[dict]:
-    """Uso de cada partición montada; omite las que no se pueden leer."""
+    """Usage of every mounted partition; unreadable ones are skipped."""
     disks = []
     for partition in psutil.disk_partitions(all=False):
         try:
@@ -67,7 +74,6 @@ def get_disks() -> list[dict]:
                 "percent": usage.percent,
             }
         )
-    # Respaldo: si no hay particiones legibles, al menos la raíz.
     if not disks:
         try:
             usage = psutil.disk_usage("/")
@@ -87,7 +93,7 @@ def get_disks() -> list[dict]:
 
 
 def get_load_avg() -> Optional[dict]:
-    """Carga del sistema (1, 5 y 15 minutos). Solo disponible en Linux/Unix."""
+    """Load average (1, 5 and 15 minutes). Linux/Unix only."""
     try:
         one, five, fifteen = os.getloadavg()
         return {"one_min": one, "five_min": five, "fifteen_min": fifteen}
@@ -96,7 +102,7 @@ def get_load_avg() -> Optional[dict]:
 
 
 def get_uptime() -> tuple[int, str, str]:
-    """Segundos, texto legible e ISO de la fecha de arranque."""
+    """Returns (seconds, human readable, boot time ISO)."""
     boot_time = psutil.boot_time()
     seconds = max(0, int(time.time() - boot_time))
     boot_iso = datetime.fromtimestamp(boot_time, tz=timezone.utc).isoformat()
@@ -119,45 +125,43 @@ def _humanize_uptime(seconds: int) -> str:
     return ", ".join(parts)
 
 
-def get_network_info() -> Optional[dict]:
-    """Contadores acumulados de red desde el arranque (MVP: sin tasas)."""
+def get_network_info(previous=None, previous_ts: Optional[float] = None) -> Optional[dict]:
+    """Cumulative counters plus transfer rates in bytes/second.
+
+    Rates are computed from the delta between the previous and the current
+    sample. Returns None on platforms without network counters.
+    """
     try:
         io = psutil.net_io_counters()
-        return {"bytes_sent": io.bytes_sent, "bytes_recv": io.bytes_recv}
     except (psutil.Error, OSError):
         return None
-
-
-def get_summary() -> dict:
-    uptime_seconds, uptime_human, boot_iso = get_uptime()
+    now = time.monotonic()
+    sent_bps = recv_bps = None
+    if previous is not None and previous_ts is not None:
+        elapsed = now - previous_ts
+        if elapsed > 0:
+            sent_bps = max(0, io.bytes_sent - previous.bytes_sent) / elapsed
+            recv_bps = max(0, io.bytes_recv - previous.bytes_recv) / elapsed
     return {
-        "hostname": _hostname(),
-        "platform": platform.platform(),
-        "cpu": get_cpu_info(),
-        "memory": get_memory_info(),
-        "disks": get_disks(),
-        "load_avg": get_load_avg(),
-        "uptime_seconds": uptime_seconds,
-        "uptime_human": uptime_human,
-        "boot_time_iso": boot_iso,
-        "network": get_network_info(),
-        "collected_at": _now_iso(),
+        "bytes_sent": io.bytes_sent,
+        "bytes_recv": io.bytes_recv,
+        "sent_bps": round(sent_bps, 1) if sent_bps is not None else None,
+        "recv_bps": round(recv_bps, 1) if recv_bps is not None else None,
+        "state": (io, now),
     }
 
 
 def get_processes(limit: int = 10, sort_by: str = "cpu") -> tuple[int, list[dict]]:
-    """Top de procesos según CPU o memoria.
+    """Top processes by CPU, memory or name.
 
-    El porcentaje de CPU de psutil necesita dos lecturas; se hace una
-    pasada de calibración con una pequeña pausa (~0.1 s) para obtener
-    valores reales. Es un costo aceptable para un MVP.
+    psutil needs two readings per process to compute CPU percentages; a
+    short calibration pass (~0.1 s) provides real values.
 
-    Devuelve (cantidad examinada, procesos ordenados y recortados).
+    Returns (checked count, sorted and truncated processes).
     """
     processes: list[dict] = []
     try:
         procs = list(psutil.process_iter(["pid", "name", "username"]))
-        # Primera pasada: calibración de cpu_percent por proceso.
         for proc in procs:
             try:
                 proc.cpu_percent(None)
@@ -179,7 +183,6 @@ def get_processes(limit: int = 10, sort_by: str = "cpu") -> tuple[int, list[dict
                     }
                 )
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
-                # Proceso terminó o no tenemos permisos: se omite.
                 continue
     except Exception:
         return 0, []

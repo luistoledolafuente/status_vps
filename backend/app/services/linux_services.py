@@ -1,16 +1,19 @@
-"""Detección y estado de servicios Linux.
+"""Linux service discovery and status.
 
-Orden de resolución:
-1. systemd (solo si de verdad es el init, evita el error típico de WSL).
+Resolution order:
+1. systemd (only if PID 1 is really systemd; avoids the typical WSL error).
 2. SysV via /etc/init.d.
-3. Si no hay gestor accesible, respuesta controlada con available=False.
+3. If no manager is accessible, a controlled response with available=False.
+
+`get_services_with_tracking` also resolves the status of configured
+tracked services (nginx, docker, ...) including "not installed".
 """
 
 import os
 import shutil
 import subprocess
 
-from ..schemas.services import ServiceInfo, ServicesResponse
+from ..schemas.services import ServiceInfo, ServicesResponse, TrackedService
 
 _STATE_LABELS = {
     "active": "Activo",
@@ -33,7 +36,7 @@ def _systemctl_available() -> bool:
 
 
 def _system_is_booted_with_systemd() -> bool:
-    """Comprueba si PID 1 es systemd (evita el error típico de WSL sin systemd)."""
+    """Checks whether PID 1 is systemd (avoids the typical WSL error)."""
     try:
         with open("/proc/1/comm", "r", encoding="utf-8") as proc:
             return proc.read().strip() == "systemd"
@@ -42,7 +45,7 @@ def _system_is_booted_with_systemd() -> bool:
 
 
 def _safe_run(cmd: list[str]) -> tuple[int, str, str]:
-    """Ejecuta un comando y devuelve (código de salida, stdout, stderr)."""
+    """Runs a command and returns (exit code, stdout, stderr) safely."""
     try:
         result = subprocess.run(
             cmd,
@@ -57,19 +60,19 @@ def _safe_run(cmd: list[str]) -> tuple[int, str, str]:
 
 
 def _parse_systemctl_units(stdout: str) -> list[ServiceInfo]:
-    """Interpreta la salida de `systemctl list-units`."""
+    """Parses `systemctl list-units` output (no legend, no colors)."""
     services = []
     for raw in stdout.splitlines():
         line = raw.strip()
         if not line:
             continue
-        # Columnas: UNIT LOAD ACTIVE SUB DESCRIPTION
+        # Columns: UNIT LOAD ACTIVE SUB DESCRIPTION
         parts = line.split(None, 4)
         parts += [""] * (5 - len(parts))
         unit, load, active, sub, description = parts[:5]
         if not unit.endswith(".service"):
             continue
-        # Limpieza del marcador de truncado "..." que systemd pega al final.
+        # systemd appends "..." when the description is truncated.
         description = description.rstrip()
         if description.endswith("..."):
             description = description[:-3].rstrip()
@@ -95,7 +98,7 @@ def _tally(services: list[ServiceInfo]) -> dict[str, int]:
 
 
 def _sysv_services() -> list[ServiceInfo]:
-    """Enumera scripts de /etc/init.d (excluye README y archivos ocultos)."""
+    """Lists /etc/init.d scripts (excluding README and hidden files)."""
     init_d = "/etc/init.d"
     if not os.path.isdir(init_d):
         return []
@@ -122,9 +125,8 @@ def _sysv_services() -> list[ServiceInfo]:
 
 
 def get_services() -> ServicesResponse:
-    """Estado de los servicios del sistema, con degradación controlada."""
-
-    # ---- Preferencia 1: systemd -----------------------------------------
+    """Service status with controlled degradation."""
+    # --- Preferred: systemd -------------------------------------------------
     if _systemctl_available():
         code, stdout, _stderr = _safe_run(
             [
@@ -150,12 +152,12 @@ def get_services() -> ServicesResponse:
                 return ServicesResponse(
                     available=True,
                     manager="systemd",
-                    detail="systemctl respondió pero no listó ningún servicio.",
+                    detail="systemctl responded but listed no services.",
                     services=[],
                     counts={},
                 )
 
-    # ---- Preferencia 2: scripts SysV ------------------------------------
+    # --- Fallback: SysV scripts --------------------------------------------
     sysv_services = _sysv_services()
     if sysv_services:
         return ServicesResponse(
@@ -166,7 +168,7 @@ def get_services() -> ServicesResponse:
             counts=_tally(sysv_services),
         )
 
-    # ---- Sin gestor accesible: respuesta controlada (no rompe la app) ----
+    # --- No accessible manager: controlled response (never crashes) --------
     return ServicesResponse(
         available=False,
         manager=None,
@@ -178,3 +180,35 @@ def get_services() -> ServicesResponse:
         services=[],
         counts={},
     )
+
+
+def _build_tracked(services: list[ServiceInfo], names: list[str]) -> list[TrackedService]:
+    by_name = {service.name: service for service in services}
+    tracked = []
+    for name in names:
+        service = by_name.get(f"{name}.service")
+        if service is None:
+            tracked.append(
+                TrackedService(name=name, state="not_found", label="No instalado", active_state=None)
+            )
+        elif service.active_state == "failed":
+            tracked.append(
+                TrackedService(name=name, state="failed", label="Fallido", active_state="failed")
+            )
+        else:
+            tracked.append(
+                TrackedService(
+                    name=name,
+                    state=service.active_state,
+                    label=service.label,
+                    active_state=service.active_state,
+                )
+            )
+    return tracked
+
+
+def get_services_with_tracking(tracked_names: list[str]) -> ServicesResponse:
+    """Service status plus per-name status for configured tracked services."""
+    response = get_services()
+    response.tracked = _build_tracked(response.services, tracked_names)
+    return response

@@ -1,4 +1,4 @@
-"""Esquemas (DTO) de las métricas del sistema."""
+"""Schemas (DTO) for system metrics."""
 
 from typing import Literal, Optional
 
@@ -36,6 +36,8 @@ class LoadAvg(BaseModel):
 class NetworkInfo(BaseModel):
     bytes_sent: int
     bytes_recv: int
+    sent_bps: Optional[float] = None
+    recv_bps: Optional[float] = None
 
 
 class SummaryMetrics(BaseModel):
@@ -68,3 +70,18 @@ class ProcessesResponse(BaseModel):
     sort_by: Literal["cpu", "memory", "name"]
     processes: list[ProcessInfo]
     collected_at: str
+
+
+class HistoryPoint(BaseModel):
+    timestamp: str
+    cpu_percent: float
+    memory_percent: float
+    disk_percent: float
+    sent_bps: Optional[float] = None
+    recv_bps: Optional[float] = None
+
+
+class HistoryResponse(BaseModel):
+    storage: str
+    interval_seconds: float
+    points: list[HistoryPoint]

@@ -1,14 +1,23 @@
-// Utilidades de formato para mostrar datos legibles a cualquier usuario.
+// Formatting utilities: readable values for technical and non-technical users.
 
 export function formatBytes(bytes, decimals = 1) {
   if (bytes === null || bytes === undefined || Number.isNaN(bytes)) return "—";
   if (bytes === 0) return "0 B";
   const units = ["B", "KB", "MB", "GB", "TB", "PB"];
-  const index = Math.min(
-    Math.floor(Math.log(bytes) / Math.log(1024)),
-    units.length - 1
-  );
+  const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
   const value = bytes / 1024 ** index;
+  return `${value.toFixed(index === 0 ? 0 : decimals)} ${units[index]}`;
+}
+
+export function formatBitsPerSecond(bps, decimals = 1) {
+  if (bps === null || bps === undefined || Number.isNaN(bps)) return "—";
+  const units = ["B/s", "KB/s", "MB/s", "GB/s"];
+  let value = bps;
+  let index = 0;
+  while (value >= 1024 && index < units.length - 1) {
+    value /= 1024;
+    index += 1;
+  }
   return `${value.toFixed(index === 0 ? 0 : decimals)} ${units[index]}`;
 }
 
@@ -34,16 +43,25 @@ export function formatDateTime(isoString) {
   if (!isoString) return "—";
   const date = new Date(isoString);
   if (Number.isNaN(date.getTime())) return "—";
-  return date.toLocaleString("es-ES", {
-    dateStyle: "short",
-    timeStyle: "medium",
-  });
+  return date.toLocaleString("es-ES", { dateStyle: "short", timeStyle: "medium" });
 }
 
 export function formatTime(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return "—";
   return date.toLocaleTimeString("es-ES", {
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
   });
+}
+
+export function maxDiskPercent(summary) {
+  const disks = summary?.disks ?? [];
+  if (disks.length === 0) return 0;
+  return Math.max(...disks.map((disk) => disk.percent ?? 0));
+}
+
+export function pickMainDisk(disks = []) {
+  if (disks.length === 0) return null;
+  return [...disks].sort((a, b) => b.total_bytes - a.total_bytes)[0];
 }

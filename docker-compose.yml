@@ -1,0 +1,33 @@
+services:
+  backend:
+    build: ./backend
+    container_name: sysstatus-backend
+    env_file:
+      - ./backend/.env
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    container_name: sysstatus-frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  # Persistencia futura (histórico y alertas):
+  # db:
+  #   image: postgres:16-alpine
+  #   container_name: sysstatus-db
+  #   environment:
+  #     POSTGRES_USER: sysstatus
+  #     POSTGRES_PASSWORD: sysstatus
+  #     POSTGRES_DB: sysstatus
+  #   volumes:
+  #     - pgdata:/var/lib/postgresql/data
+  #   restart: unless-stopped
+
+# volumes:
+#   pgdata:

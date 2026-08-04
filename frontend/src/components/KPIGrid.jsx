@@ -1,7 +1,7 @@
-// Cuadrícula de tarjetas KPI del resumen del sistema.
+// KPI grid: CPU, memory, disk, network and uptime cards with severity colors.
 
 import { MetricCard } from "./MetricCard";
-import { formatBytes, formatPercent, formatUptime } from "../utils/format";
+import { formatBitsPerSecond, formatBytes, formatPercent, formatUptime, maxDiskPercent, pickMainDisk } from "../utils/format";
 
 const IconCpu = (
   <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
@@ -26,6 +26,14 @@ const IconDisk = (
   </svg>
 );
 
+const IconNetwork = (
+  <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M3 7h11M3 12h8M3 17h5" strokeLinecap="round" />
+    <circle cx="17" cy="7" r="3" />
+    <circle cx="15" cy="17" r="3" />
+  </svg>
+);
+
 const IconClock = (
   <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
     <circle cx="12" cy="12" r="9" />
@@ -33,19 +41,19 @@ const IconClock = (
   </svg>
 );
 
-function pickMainDisk(disks = []) {
-  return disks.length === 0 ? null : [...disks].sort((a, b) => b.total_bytes - a.total_bytes)[0];
+// Gradient by severity for better "cola de jerarquía de información".
+function severityGradient(percent) {
+  if (percent >= 90) return "rose";
+  if (percent >= 80) return "amber";
+  return "indigo";
 }
 
 export function KPIGrid({ summary, loading }) {
   if (loading && !summary) {
     return (
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {[0, 1, 2, 3].map((index) => (
-          <div
-            key={index}
-            className="h-36 animate-pulse rounded-2xl bg-slate-200 ring-1 ring-slate-200"
-          />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        {[0, 1, 2, 3, 4].map((index) => (
+          <div key={index} className="h-36 animate-pulse rounded-2xl bg-slate-200 ring-1 ring-slate-200" />
         ))}
       </div>
     );
@@ -55,19 +63,18 @@ export function KPIGrid({ summary, loading }) {
   const memory = summary?.memory;
   const disk = pickMainDisk(summary?.disks);
   const loadAvg = summary?.load_avg;
+  const network = summary?.network;
 
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
       <MetricCard
         title="Uso de CPU"
         value={cpu ? formatPercent(cpu.percent) : "—"}
         subtitle={
-          cpu
-            ? `${cpu.cores} ${cpu.cores === 1 ? "núcleo físico" : "núcleos físicos"} · ${cpu.logical_cores} lógicos`
-            : "No disponible"
+          cpu ? `${cpu.cores} ${cpu.cores === 1 ? "núcleo físico" : "núcleos físicos"} · ${cpu.logical_cores} lógicos` : "No disponible"
         }
         progress={cpu?.percent}
-        gradient="indigo"
+        gradient={severityGradient(cpu?.percent)}
         icon={IconCpu}
       />
 
@@ -77,22 +84,33 @@ export function KPIGrid({ summary, loading }) {
         unit={memory ? `de ${formatBytes(memory.total_bytes)}` : ""}
         subtitle={memory ? `Libre: ${formatBytes(memory.available_bytes)}` : "No disponible"}
         progress={memory?.percent}
-        gradient="emerald"
+        gradient={severityGradient(memory?.percent)}
         icon={IconMemory}
       />
 
       <MetricCard
         title="Almacenamiento"
         value={disk ? formatPercent(disk.percent) : "—"}
-        unit=""
         subtitle={
           disk
             ? `${formatBytes(disk.free_bytes)} disponibles de ${formatBytes(disk.total_bytes)}`
             : "No disponible"
         }
         progress={disk?.percent}
-        gradient="amber"
+        gradient={severityGradient(disk?.percent)}
         icon={IconDisk}
+      />
+
+      <MetricCard
+        title="Tráfico de red"
+        value={network && network.recv_bps != null ? formatBitsPerSecond(network.recv_bps) : "—"}
+        subtitle={
+          network
+            ? `Enviado: ${network.sent_bps != null ? formatBitsPerSecond(network.sent_bps) : "—"}`
+            : `${maxDiskPercent(summary) > 0 ? "Sin datos de red" : "No disponible"}`
+        }
+        gradient="sky"
+        icon={IconNetwork}
       />
 
       <MetricCard
@@ -100,10 +118,10 @@ export function KPIGrid({ summary, loading }) {
         value={summary ? formatUptime(summary.uptime_seconds) : "—"}
         subtitle={
           loadAvg
-            ? `Carga del sistema: ${loadAvg.one_min.toFixed(1)} · ${loadAvg.five_min.toFixed(1)} · ${loadAvg.fifteen_min.toFixed(1)}`
+            ? `Carga: ${loadAvg.one_min.toFixed(1)} · ${loadAvg.five_min.toFixed(1)} · ${loadAvg.fifteen_min.toFixed(1)}`
             : summary?.hostname ?? "Cargando…"
         }
-        gradient="sky"
+        gradient="indigo"
         icon={IconClock}
       />
     </div>

@@ -1,220 +1,281 @@
-# System Status — Monitor de recursos del servidor
+# System Status — Monitor profesional de servidores Linux
 
-Aplicación web de **observabilidad y monitoreo** de un servidor Linux, pensada para
-usuarios técnicos y también para personas sin conocimientos técnicos. Muestra de forma
-clara el uso de **CPU, memoria RAM, disco, red, uptime, carga del sistema, procesos
-más pesados y el estado de los servicios Linux**.
+Aplicación web de **observabilidad y monitoreo** de un servidor Linux en tiempo casi
+real, pensada para usuarios técnicos y no técnicos. Muestra CPU, RAM, disco (por
+partición), tráfico de red, uptime, carga del sistema, procesos más pesados, estado
+de servicios (systemd/SysV) y **alertas por umbrales**.
 
-Diseñada para ejecutarse **en WSL2 (Ubuntu)** como entorno de práctica y lista para
-**migrarse a un servidor Linux real**.
+Diseñada para practicar en **WSL2 (Ubuntu)** y migrarse después a un servidor Linux
+real (Docker incluido).
 
 ---
 
 ## Stack
 
-| Componente | Tecnología |
+| Capa | Tecnología |
 |---|---|
 | Backend | Python + FastAPI + Uvicorn |
 | Métricas | psutil |
+| Tiempo real | WebSocket (`/ws/metrics`, cada 2 s) + REST |
 | Frontend | React + Vite |
-| Gráficas | Chart.js / react-chartjs-2 |
+| Gráficas | Chart.js (react-chartjs-2) |
 | Estilos | Tailwind CSS |
-| Comunicación | REST API (con CORS + proxy en desarrollo) |
+| Config | variables de entorno (pydantic-settings) |
+| Seguridad | JWT opcional + roles admin/viewer + rate limiting preparado |
+| Logs | JSON estructurado (stdout) |
+
+---
+
+## Funcionalidades
+
+- **KPIs**: CPU, memoria, disco, tráfico de red y uptime, con color por severidad.
+- **Gráficas**: evolución de CPU/memoria/disco, uso por partición y tasas de red.
+- **Procesos**: top por CPU o memoria, búsqueda y paginación.
+- **Servicios**: seguimiento de servicios clave (nginx, docker, postgresql, redis, ssh, cron)
+  y listado completo con filtros por estado. Si systemctl no está disponible
+  (WSL sin systemd), se devuelve una respuesta controlada, nunca un error.
+- **Alertas**: CPU, memoria, disco y servicio caído, con umbrales configurables,
+  mensaje accionable y sugerencia. Se auto-resuelven al normalizarse.
+- **Histórico**: snapshots en memoria (CPU/RAM/disco/red) expuestos en
+  `/api/metrics/history` para rellenar las gráficas.
+- **Observabilidad interna**: tiempo de respuesta promedio, clientes WebSocket,
+  errores del recolector y última recolección en `/api/health`.
+- **Modo en vivo seleccionable**: WebSocket o Polling, con indicador de estado
+  (conectado / reconectando / desconectado).
 
 ## Estructura del proyecto
 
 ```
 system_status_vps/
-├── backend/                 # API FastAPI
-│   ├── app/
-│   │   ├── main.py          # Punto de entrada y montaje de la app
-│   │   ├── core/
-│   │   │   └── config.py    # Configuración vía variables de entorno
-│   │   ├── api/
-│   │   │   └── routes/
-│   │   │       ├── health.py
-│   │   │       ├── metrics.py
-│   │   │       └── services.py
-│   │   ├── schemas/         # DTOs (Pydantic)
-│   │   │   ├── metrics.py
-│   │   │   └── services.py
-│   │   └── services/        # Lógica de dominio
-│   │       ├── system_metrics.py
-│   │       └── linux_services.py
-│   └── requirements.txt
-├── frontend/                # SPA React con Vite
-│   ├── index.html
-│   ├── package.json
-│   ├── vite.config.js       # Proxy /api -> backend en desarrollo
-│   ├── tailwind.config.js
+├── backend/                          # API FastAPI
+│   ├── .env.example
+│   ├── Dockerfile
+│   ├── requirements.txt
+│   └── app/
+│       ├── main.py                   # app, CORS, lifespan, broadcaster WS, middleware
+│       ├── core/
+│       │   ├── config.py             # Settings (pydantic-settings, prefijo SYSSTATUS_)
+│       │   ├── logging.py            # logs JSON estructurados
+│       │   └── security.py           # JWT (create/decode token)
+│       ├── api/
+│       │   ├── deps.py               # get_current_user, require_role, rate_limit, app state
+│       │   └── routes/
+│       │       ├── health.py         # /api/health + observabilidad
+│       │       ├── metrics.py        # summary, processes, history
+│       │       ├── services.py       # servicios + seguimiento
+│       │       ├── alerts.py         # alertas y umbrales
+│       │       ├── auth.py           # POST /api/auth/token (JWT)
+│       │       └── websocket.py      # GET /ws/metrics
+│       ├── schemas/                  # DTOs Pydantic
+│       ├── services/                 # lógica de dominio
+│       │   ├── collector.py          # orquesta fuentes + errores del recolector
+│       │   ├── system_metrics.py     # psutil (CPU, RAM, disco, red con tasas)
+│       │   ├── linux_services.py     # systemctl/SysV + servicios en seguimiento
+│       │   ├── history.py            # histórico en memoria (sustituible por SQLite/PG)
+│       │   └── alerts.py             # evaluador de umbrales + alertas activas
+│       └── ws/
+│           └── manager.py            # conexiones WebSocket y broadcast
+├── frontend/                         # SPA React + Vite
+│   ├── .env.example
+│   ├── Dockerfile
+│   ├── nginx.conf                    # proxy REST + WS en producción
 │   └── src/
-│       ├── main.jsx
-│       ├── App.jsx
-│       ├── index.css
-│       ├── api/client.js
-│       ├── utils/format.js
-│       ├── hooks/useDashboardData.js
+│       ├── config.js                 # API base y URL del WebSocket
+│       ├── api/client.js             # capa única de REST
+│       ├── hooks/
+│       │   ├── useWebSocket.js       # conexión, reconexión con backoff, estado
+│       │   ├── usePolling.js         # polling con loading/error/refresh
+│       │   └── useDashboardData.js   # orquesta fuentes + histórico de gráficas
 │       ├── components/
-│       │   ├── KPIGrid.jsx
-│       │   ├── MetricCard.jsx
-│       │   ├── SystemCharts.jsx
-│       │   ├── ProcessTable.jsx
-│       │   └── ServiceStatusList.jsx
-│       └── pages/Dashboard.jsx
+│       │   ├── layout/AppHeader.jsx  # tabs + selector de modo + estado WS
+│       │   ├── ui/                   # Card, Badge, StatusDot, EmptyState, ErrorBanner, Skeleton
+│       │   ├── KPIGrid.jsx, MetricCard.jsx, SystemCharts.jsx
+│       │   ├── ProcessTable.jsx, ServiceStatusList.jsx, AlertList.jsx
+│       └── pages/
+│           ├── Dashboard.jsx         # resumen
+│           ├── ProcessesPage.jsx
+│           ├── ServicesPage.jsx
+│           └── AlertsPage.jsx
+├── docker-compose.yml
 └── README.md
 ```
 
-## Endpoints de la API
+---
+
+## Endpoints
 
 | Método | Ruta | Descripción |
 |---|---|---|
-| GET | `/api/health` | Estado de la API |
-| GET | `/api/metrics/summary` | CPU, RAM, disco, red, uptime y carga |
-| GET | `/api/metrics/processes?limit=10&sort_by=cpu` | Procesos más pesados (`cpu` o `memory`) |
-| GET | `/api/services` | Estado de servicios Linux (systemd/SysV) |
-| GET | `/docs` | Documentación interactiva (Swagger) |
+| GET | `/api/health` | Estado + observabilidad interna (latencia, WS, errores) |
+| GET | `/api/metrics/summary` | CPU, RAM, disco por partición, red, uptime, carga |
+| GET | `/api/metrics/processes?limit=12&sort_by=cpu` | Procesos (`cpu` / `memory` / `name`) |
+| GET | `/api/metrics/history?limit=200&since=ISO` | Histórico de snapshots |
+| GET | `/api/services` | Servicios completos + seguimiento (estado controlado si no hay systemd) |
+| GET | `/api/alerts` | Alertas activas/resueltas + umbrales |
+| POST | `/api/auth/token` | JWT (admin/viewer, opcional) |
+| WS | `/ws/metrics` | Stream en vivo cada 2 s (`{"type":"metrics","data":{...}}`) |
+| GET | `/docs` | Swagger interactivo |
 
----
+## Ejecución en WSL2 (Ubuntu)
 
-## Puesta en marcha en WSL2 (Ubuntu)
-
-### 1. Requisitos previos
+### 1. Requisitos
 
 ```bash
 sudo apt update
 sudo apt install -y python3-venv python3-pip nodejs npm
-node --version   # debe ser 18 o superior
-python3 --version
+node --version   # 18 o superior
 ```
 
 ### 2. Backend
 
 ```bash
 cd backend
-
-# Crear y activar el entorno virtual
 python3 -m venv .venv
 source .venv/bin/activate
-
-# Instalar dependencias
 pip install -r requirements.txt
 
-# Arrancar el servidor de desarrollo
+# Opcional: crear .env desde la plantilla
+cp .env.example .env
+
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Prueba rápida:
-
-```bash
-curl http://localhost:8000/api/health
-curl http://localhost:8000/api/metrics/summary
-```
-
-La documentación interactiva queda en <http://localhost:8000/docs>.
+Prueba: `curl http://localhost:8000/api/health` · Swagger en `http://localhost:8000/docs`.
 
 ### 3. Frontend
 
 ```bash
 cd frontend
-
-# Instalar dependencias
 npm install
-
-# Arrancar el servidor de desarrollo de Vite
 npm run dev
 ```
 
-Abre <http://localhost:5173> desde el navegador de Windows o de Linux.
-Vite usa un **proxy** (`/api` → `http://localhost:8000`) para que no haya
-problemas de CORS en desarrollo.
+Abre `http://localhost:5173`. Vite redirige `/api` y `/ws` al backend, así que
+WebSocket y REST funcionan sin configuración adicional.
 
-> Si accedes desde otra máquina, el proxy de Vite acaba en localhost; usa
-> host `0.0.0.0` del backend y define `VITE_API_BASE_URL=http://<ip>:8000`
-> (por ejemplo en `frontend/.env`) para apuntar directamente a la API.
+### 4. Servicios reales en WSL (opcional)
 
-### 4. Ver todos los servicios (opcional, WSL con systemd)
-
-Por defecto, WSL2 no arranca systemd, así que `/api/services` devuelve una
-respuesta **controlada** («servicio no disponible») en lugar de fallar.
-Para probar el estado real de servicios, activa systemd en WSL:
+WSL2 no arranca systemd por defecto; `/api/services` responderá con
+`available:false` (comportamiento controlado). Para ver estados reales:
 
 ```bash
-# En WSL, editar /etc/wsl.conf (requiere sudo)
 sudo tee /etc/wsl.conf > /dev/null <<'EOF'
 [boot]
 systemd=true
 EOF
 ```
 
-Reinicia WSL desde Windows:
+Reinicia WSL desde Windows (`wsl --shutdown`), vuelve a abrir, y reinicia ambos
+servidores.
 
-```powershell
-wsl --shutdown
-```
-
-Vuelve a abrir WSL, reinicia backend y frontend, y `/api/services` reportará
-los servicios como `Activo` / `Inactivo` / `Fallido`.
-
----
-
-## Migración a un servidor Linux real
-
-El código no depende de WSL: `psutil` lee métricas reales y systemctl funciona
-igual en un servidor. Cambios recomendados para producción:
-
-1. **Servir el frontend compilado**: `npm run build` (genera `frontend/dist/`)
-   y súbelo con Nginx/Apache, o hazlo servir desde FastAPI.
-2. **Servir la API con un proceso gestionado**. Crear un unit systemd:
-
-```ini
-# /etc/systemd/system/system-status-api.service
-[Unit]
-Description=System Status API
-After=network.target
-
-[Service]
-User=www-data
-WorkingDirectory=/opt/system_status_vps/backend
-Environment="SYSSTATUS_CORS_ORIGINS=https://tu-dominio.com"
-ExecStart=/opt/system_status_vps/backend/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
-Restart=always
-
-[Install]
-WantedBy=multi-user.target
-```
+## Docker (servidor real)
 
 ```bash
-sudo systemctl daemon-reload
-sudo systemctl enable --now system-status-api
+cp backend/.env.example backend/.env   # ajusta los valores
+docker compose up --build
 ```
 
-3. **Dominio + HTTPS**: proxy inverso (Caddy o Nginx) del frontend hacia
-   `http://127.0.0.1:8000`.
-4. Variables de entorno disponibles (ver `backend/app/core/config.py`):
-   - `SYSSTATUS_ENV` — `development` | `production`
-   - `SYSSTATUS_CORS_ORIGINS` — lista de orígenes permitidos separados por coma
-   - `SYSSTATUS_MAX_PROCESSES` — límite máximo del endpoint de procesos
+- Frontend: `http://localhost:5173` (nginx sirve la SPA y proxya REST + WS).
+- Backend: `http://localhost:8000`.
 
 ---
 
-## Decisiones y limitaciones del MVP
+## Configuración (variables de entorno)
 
-- **Historial de la gráfica**: se acumula **en el cliente** durante la sesión
-  (polling cada 3 s). No hay histórico persistido; para eso se planifica una
-  tabla en Redis/SQLite en el futuro.
-- **CPU por proceso**: psutil necesita dos lecturas; el endpoint usa una
-  pequeña pausa (~0,1 s) para obtener porcentajes reales.
-- **Red**: solo contadores acumulados (bytes enviados/recibidos). Las tasas
-  (Mbps) y las interfaces por separado quedan como mejora futura.
-- **Servicios**: si no hay systemd/SysV, se devuelve `available:false` con un
-  mensaje claro; la API nunca rompe.
-- **Sin autenticación**: diseñado para uso local en una red de confianza.
-- **Sin base de datos**: todavía no es necesaria en el MVP.
+Prefijo `SYSSTATUS_`, archivo `backend/.env` (ver `.env.example`). Las más relevantes:
 
-## Hoja de ruta (siguiente iteraciones)
+| Variable | Default | Descripción |
+|---|---|---|
+| `SYSSTATUS_CORS_ORIGINS` | `http://localhost:5173,...` | Orígenes permitidos (coma) |
+| `SYSSTATUS_AUTH_ENABLED` | `false` | Activa verificación JWT en todos los endpoints |
+| `SYSSTATUS_JWT_SECRET` | — | **Obligatorio cambiarlo en producción** |
+| `SYSSTATUS_ADMIN_PASSWORD` / `VIEWER_PASSWORD` | admin123/viewer123 | Credenciales de los roles |
+| `SYSSTATUS_WS_INTERVAL_SECONDS` | `2` | Frecuencia del broadcast WebSocket |
+| `SYSSTATUS_HISTORY_SNAPSHOT_SECONDS` | `15` | Cada cuánto se guarda un snapshot |
+| `SYSSTATUS_ALERT_CPU_WARNING` / `_CRITICAL` | `80` / `90` | Umbrales CPU |
+| `SYSSTATUS_ALERT_MEMORY_WARNING` / `_CRITICAL` | `80` / `90` | Umbrales memoria |
+| `SYSSTATUS_ALERT_DISK_WARNING` / `_CRITICAL` | `80` / `90` | Umbrales disco |
+| `SYSSTATUS_TRACKED_SERVICES` | `nginx,docker,postgresql,redis,ssh,cron` | Servicios en seguimiento |
+| `SYSSTATUS_RATE_LIMIT_ENABLED` / `_PER_MINUTE` | `false` / `120` | Límite por IP (preparado) |
+| `SYSSTATUS_LOG_LEVEL` | `INFO` | Nivel de logs JSON |
 
-- [ ] Histórico de métricas (persistencia) y visualización por rango de fechas.
-- [ ] Alertas por umbrales (CPU/RAM/disco) vía WebSocket o polling.
-- [ ] Autenticación y roles (admin / lectura).
-- [ ] Soporte multi-servidor (agente remoto o SSH).
-- [ ] Alertas por email y notificaciones.
+## Seguridad (preparada desde el inicio)
+
+- **JWT opcional**: con `SYSSTATUS_AUTH_ENABLED=true` todos los endpoints REST
+  exigen `Authorization: Bearer <token>` (obtenido en `/api/auth/token`).
+- **Roles**: `admin` y `viewer`; la dependencia `require_role` está lista para
+  proteger rutas de escritura/administración.
+- **Rate limiting**: limitador por IP incluido (desactivado por defecto), pensado
+  para activarse detrás de un proxy en producción.
+- **Validación**: Pydantic en todas las respuestas y parámetros (límites en
+  queries, enumerados en `sort_by`, etc.).
+- **WebSocket**: solo lectura y con volumen controlado; no acepta comandos.
+- Recomendaciones OWASP aplicadas: secretos por entorno (nunca en código),
+  contraseñas con comparación en tiempo constante, errores 401/403 explícitos.
+
+> Antes de exponerlo a Internet: HTTPS (proxy inverso), cambiar `JWT_SECRET` y
+> contraseñas, habilitar auth, y considerar rate limiting + firewall.
+
+## Polling vs WebSocket — comparación y decisión
+
+| Criterio | Polling (REST) | WebSocket |
+|---|---|---|
+| Latencia | Depende del intervalo (2 s mínimo razonable) | Push inmediato (máximo ~2 s en este diseño) |
+| Carga de red | N cabeceras HTTP por tick y por cliente (overhead por petición) | 1 conexión persistente, frames ligeros; menor overhead total |
+| Carga del servidor | Coste fijo por petición; crece linealmente con los clientes | Coste por conexión + broadcast; escala bien con pocos clientes |
+| Simplicidad | Trivial: fetch + setInterval, cachés y proxies HTTP lo entienden | Reintentos, backoff, estados de conexión, proxies con timeout |
+| Fiabilidad | Se auto-recupera (cada petición es independiente) | Requiere lógica de reconexión (implementada) |
+| Backpressure | El cliente se auto-regula (intervalo) | El servidor debe manejar clientes lentos (broadcast con try/except) |
+| Caché/proxies | Compatible con HTTP cache | No aplica |
+| Caso de uso | Datos gruesos, histórico, cargas puntuales | Métricas que cambian cada segundo |
+
+**Conclusión para este proyecto**: con 2 s de actualización y pocos clientes
+concurrentes, el WebSocket gana en experiencia (sin parpadeos, sin peticiones
+repetidas) pero el polling es más simple y robusto en entornos con proxies
+estrictos. **Se implementa una estrategia híbrida**:
+
+1. **WebSocket** para el resumen en vivo (KPIs + gráficas), con reconexión y
+   *fallback* manual a polling si la conexión falla.
+2. **REST** para datos gruesos o poco volátiles: procesos y servicios cada 10 s,
+   alertas cada 5 s, salud cada 10 s.
+3. **REST `/history`** al cargar la página para rellenar las gráficas con el
+   pasado reciente (el histórico del servidor, no solo lo visto en sesión).
+
+Si algún día hay decenas de clientes, el broadcast ya no recoge métricas por
+cliente (una sola recolección compartida), por lo que el coste marginal por
+conexión es mínimo.
+
+## Decisiones técnicas
+
+- **Recolector único compartido**: el broadcast WS y los endpoints REST usan la
+  misma instancia (`MetricsCollector`), con muestra de red compartida para
+  calcular tasas y caché de errores para observabilidad.
+- **Histórico en memoria (ring buffer)**: suficiente para el MVP; la interfaz
+  (`record`/`points`) está aislada en `HistoryStore` para migrar a SQLite/PostgreSQL
+  sin tocar rutas ni frontend.
+- **Alertas sin ruido**: solo transiciones (alta/resuelta), deduplicación por clave
+  y reescalado warning→critical sin duplicar.
+- **systemd con verificación real**: no basta con que exista `systemctl`; se
+  comprueba que PID 1 sea systemd para no caer en el error típico de WSL.
+- **Logs JSON**: listos para journald/Loki; incluyen método, ruta, status y
+  duración por petición.
+- **Cero dependencias superfluas**: React Router no hace falta (navegación por
+  pestañas), el rate limiter es ~30 líneas y el auth usa PyJWT puro.
+
+## Limitaciones del MVP profesional
+
+- Histórico y alertas viven en memoria (se pierden al reiniciar; el endpoint de
+  history documenta el contrato para la futura BD).
+- Autenticación JWT existe pero desactivada por defecto; no hay gestión de
+  usuarios persistente (solo admin/viewer por entorno).
+- Las alertas no notifican (sin email/telegram); solo se ven en la UI.
+- El WebSocket no autentica aún (solo lectura; añadir token en el handshake si
+  se habilita auth en producción).
+
+## Hoja de ruta
+
+- [ ] Persistencia SQLite/PostgreSQL para histórico y alertas (interfaz ya aislada).
+- [ ] Notificaciones (email/Telegram/Webhooks) con silenciamiento.
+- [ ] JWT en el handshake del WebSocket + refresh tokens.
+- [ ] Múltiples servidores (agente remoto o lista de hosts en la UI).
+- [ ] Exportación de métricas (CSV/Prometheus).

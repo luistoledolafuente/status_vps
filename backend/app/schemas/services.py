@@ -1,6 +1,6 @@
-"""Esquemas (DTO) del estado de servicios Linux."""
+"""Schemas (DTO) for Linux service status."""
 
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel
 
@@ -11,8 +11,17 @@ class ServiceInfo(BaseModel):
     load_state: str = "loaded"
     active_state: str = "unknown"
     sub_state: str = "unknown"
-    # Traducción al español del estado para usuarios no técnicos.
+    # Human friendly label in Spanish.
     label: str = "Desconocido"
+
+
+class TrackedService(BaseModel):
+    """Status of a named service being monitored (configured in settings)."""
+
+    name: str
+    state: Literal["active", "inactive", "failed", "not_found", "error", "unknown"]
+    label: str
+    active_state: Optional[str] = None
 
 
 class ServicesResponse(BaseModel):
@@ -21,3 +30,4 @@ class ServicesResponse(BaseModel):
     detail: str = ""
     services: list[ServiceInfo] = []
     counts: dict[str, int] = {}
+    tracked: list[TrackedService] = []

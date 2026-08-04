@@ -1,8 +1,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
-// Configuración base de Vite.
-// El proxy evita problemas de CORS en desarrollo: /api -> backend FastAPI.
+// Vite config: proxy REST (/api) and WebSocket (/ws) to the FastAPI backend.
 export default defineConfig({
   plugins: [react()],
   server: {
@@ -12,6 +11,10 @@ export default defineConfig({
       "/api": {
         target: "http://localhost:8000",
         changeOrigin: true,
+      },
+      "/ws": {
+        target: "ws://localhost:8000",
+        ws: true,
       },
     },
   },

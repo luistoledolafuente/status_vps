@@ -1,8 +1,6 @@
-// Cliente HTTP de la API.
-// En desarrollo usa el proxy de Vite (misma URL relativa).
-// Para apuntar a otra API, definir VITE_API_BASE_URL (p. ej. https://host:8000).
+// HTTP client for the monitoring API (single layer for all REST calls).
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
+import { config } from "../config";
 
 export class ApiError extends Error {
   constructor(message, status) {
@@ -12,17 +10,25 @@ export class ApiError extends Error {
   }
 }
 
-async function request(path) {
+async function request(path, options = {}) {
   let response;
   try {
-    response = await fetch(`${API_BASE_URL}${path}`, {
-      headers: { Accept: "application/json" },
+    response = await fetch(`${config.apiBase}${path}`, {
+      headers: { Accept: "application/json", ...(options.headers ?? {}) },
+      ...options,
     });
   } catch {
     throw new ApiError("No se pudo conectar con el servidor de monitoreo.", null);
   }
   if (!response.ok) {
-    throw new ApiError(`La API respondió con estado ${response.status}.`, response.status);
+    let detail = `La API respondió con estado ${response.status}.`;
+    try {
+      const body = await response.json();
+      if (body?.detail) detail = body.detail;
+    } catch {
+      // keep the generic message
+    }
+    throw new ApiError(detail, response.status);
   }
   return response.json();
 }
@@ -33,12 +39,24 @@ export const api = {
   summary: () => request("/api/metrics/summary"),
 
   processes: ({ limit = 10, sortBy = "cpu" } = {}) => {
-    const query = new URLSearchParams({
-      limit: String(limit),
-      sort_by: sortBy,
-    });
+    const query = new URLSearchParams({ limit: String(limit), sort_by: sortBy });
     return request(`/api/metrics/processes?${query}`);
   },
 
+  history: ({ limit = 200, since } = {}) => {
+    const query = new URLSearchParams({ limit: String(limit) });
+    if (since) query.set("since", since);
+    return request(`/api/metrics/history?${query}`);
+  },
+
   services: () => request("/api/services"),
+
+  alerts: () => request("/api/alerts"),
+
+  login: (username, password) =>
+    request("/api/auth/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ username, password }),
+    }),
 };
