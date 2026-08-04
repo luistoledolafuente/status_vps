@@ -70,6 +70,7 @@ export function useWebSocket({ url, enabled = true, onMessage, reconnectBaseMs =
   }, [url, scheduleReconnect]);
 
   useEffect(() => {
+    enabledRef.current = enabled;
     if (!enabled) {
       setStatus("disconnected");
       return undefined;

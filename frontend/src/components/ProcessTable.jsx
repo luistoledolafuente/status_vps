@@ -19,7 +19,7 @@ const SORT_OPTIONS = [
   { value: "memory", label: "Por memoria" },
 ];
 
-export function ProcessTable({ processes, loading, sortBy, onSortChange, searchable = true, compact = false }) {
+export function ProcessTable({ processes = [], loading, sortBy, onSortChange, searchable = true, compact = false }) {
   const [query, setQuery] = useState("");
   const [visible, setVisible] = useState(compact ? 5 : 10);
 

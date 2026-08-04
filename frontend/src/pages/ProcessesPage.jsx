@@ -5,7 +5,7 @@ import { ProcessTable } from "../components/ProcessTable";
 export function ProcessesPage({ data }) {
   return (
     <ProcessTable
-      processes={data.processes.data ?? []}
+      processes={data.processes.data?.processes ?? []}
       loading={data.processes.loading}
       sortBy={data.processSort}
       onSortChange={data.refreshProcesses}

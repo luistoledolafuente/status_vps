@@ -13,7 +13,7 @@ export function Dashboard({ data }) {
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
         <ProcessTable
           compact
-          processes={data.processes.data ?? []}
+          processes={data.processes.data?.processes ?? []}
           loading={data.processes.loading}
           sortBy={data.processSort}
           onSortChange={data.refreshProcesses}
