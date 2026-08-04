@@ -15,7 +15,7 @@ import {
 import { Bar, Line } from "react-chartjs-2";
 import { Card } from "./ui/Card";
 import { EmptyState } from "./ui/EmptyState";
-import { formatBitsPerSecond, formatTime } from "../utils/format";
+import { formatBitsPerSecond, formatBytes, formatTime } from "../utils/format";
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Tooltip, Legend, Filler);
 
@@ -37,8 +37,8 @@ function TrendChart({ history }) {
       {
         label: "CPU",
         data: history.map((point) => point.cpu),
-        borderColor: "#6366f1",
-        backgroundColor: "rgba(99, 102, 241, 0.12)",
+        borderColor: "#0d9488",
+        backgroundColor: "rgba(13, 148, 136, 0.12)",
         fill: true,
         tension: 0.35,
         pointRadius: 0,
@@ -46,8 +46,8 @@ function TrendChart({ history }) {
       {
         label: "Memoria",
         data: history.map((point) => point.memory),
-        borderColor: "#10b981",
-        backgroundColor: "rgba(16, 185, 129, 0.12)",
+        borderColor: "#0284c7",
+        backgroundColor: "rgba(2, 132, 199, 0.12)",
         fill: true,
         tension: 0.35,
         pointRadius: 0,
@@ -88,12 +88,12 @@ function TrendChart({ history }) {
 function DiskChart({ disks }) {
   const items = disks ?? [];
   const data = {
-    labels: items.map((disk) => disk.mountpoint),
+    labels: items.map((disk) => (disk.is_root ? `${disk.mountpoint} (raíz)` : disk.mountpoint)),
     datasets: [
       {
         label: "Uso",
         data: items.map((disk) => disk.percent),
-        backgroundColor: items.map((disk) => (disk.percent >= 90 ? "#f43f5e" : disk.percent >= 80 ? "#f59e0b" : "#10b981")),
+        backgroundColor: items.map((disk) => (disk.percent >= 90 ? "#f43f5e" : disk.percent >= 80 ? "#f59e0b" : "#14b8a6")),
         borderRadius: 6,
       },
     ],
@@ -104,6 +104,17 @@ function DiskChart({ disks }) {
     scales: {
       x: { beginAtZero: true, max: 100, title: { display: true, text: "% usado" } },
       y: { grid: { display: false } },
+    },
+    plugins: {
+      ...baseOptions.plugins,
+      tooltip: {
+        callbacks: {
+          label: (ctx) => {
+            const disk = items[ctx.dataIndex];
+            return `${ctx.parsed.x.toFixed(1)}% · ${formatBytes(disk.used_bytes)} de ${formatBytes(disk.total_bytes)}${disk.fstype ? ` · ${disk.fstype}` : ""}`;
+          },
+        },
+      },
     },
   };
   return items.length === 0 ? (
@@ -168,7 +179,7 @@ export function SystemCharts({ history, summary }) {
       <Card className="lg:col-span-2" title="Evolución de recursos" subtitle="CPU, memoria y disco (% de uso)">
         <TrendChart history={history} />
       </Card>
-      <Card title="Almacenamiento por partición" subtitle="Uso actual de cada partición">
+      <Card title="Almacenamiento por partición" subtitle="Solo dispositivos locales · uso de cada partición">
         <DiskChart disks={summary?.disks} />
       </Card>
       <Card className="lg:col-span-3" title="Tráfico de red" subtitle="Velocidad de descarga y subida">

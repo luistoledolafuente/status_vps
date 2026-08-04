@@ -21,6 +21,8 @@ class MemoryInfo(BaseModel):
 class DiskInfo(BaseModel):
     partition: str
     mountpoint: str
+    fstype: str = ""
+    is_root: bool = False
     total_bytes: int
     used_bytes: int
     free_bytes: int

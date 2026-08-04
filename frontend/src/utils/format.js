@@ -61,7 +61,14 @@ export function maxDiskPercent(summary) {
   return Math.max(...disks.map((disk) => disk.percent ?? 0));
 }
 
+// The "main" disk for the KPI card: the busiest partition (highest usage),
+// preferring the root filesystem on ties. Keeps the headline honest even
+// when a huge, nearly-empty drive (e.g. a WSL vhdx) sits at 0%.
 export function pickMainDisk(disks = []) {
   if (disks.length === 0) return null;
-  return [...disks].sort((a, b) => b.total_bytes - a.total_bytes)[0];
+  const busiest = [...disks].sort((a, b) => (b.percent ?? 0) - (a.percent ?? 0))[0];
+  const roots = disks.filter((disk) => disk.is_root);
+  const root = roots.length > 0 ? roots[0] : null;
+  if (root && (busiest.percent ?? 0) < 1) return root;
+  return busiest;
 }

@@ -32,8 +32,11 @@ real (Docker incluido).
 - **Gráficas**: evolución de CPU/memoria/disco, uso por partición y tasas de red.
 - **Procesos**: top por CPU o memoria, búsqueda y paginación.
 - **Servicios**: seguimiento de servicios clave (nginx, docker, postgresql, redis, ssh, cron)
-  y listado completo con filtros por estado. Si systemctl no está disponible
-  (WSL sin systemd), se devuelve una respuesta controlada, nunca un error.
+  y listado completo con filtros por estado. Cada servicio seguido se resuelve
+  por systemd, socket/CLI de Docker o proceso (`pgrep`); si la distro no tiene
+  gestor accesible (WSL sin systemd) se devuelve una respuesta controlada,
+  nunca un error. Si Docker Desktop está instalado pero sin integración WSL,
+  aparece como "Sin acceso" con una sugerencia accionable.
 - **Alertas**: CPU, memoria, disco y servicio caído, con umbrales configurables,
   mensaje accionable y sugerencia. Se auto-resuelven al normalizarse.
 - **Histórico**: snapshots en memoria (CPU/RAM/disco/red) expuestos en

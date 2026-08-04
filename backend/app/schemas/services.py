@@ -19,9 +19,21 @@ class TrackedService(BaseModel):
     """Status of a named service being monitored (configured in settings)."""
 
     name: str
-    state: Literal["active", "inactive", "failed", "not_found", "error", "unknown"]
+    state: Literal[
+        "active",
+        "inactive",
+        "failed",
+        "not_found",
+        "unreachable",
+        "error",
+        "unknown",
+    ]
     label: str
     active_state: Optional[str] = None
+    # How the state was resolved (systemd / sysv / docker / proceso / ninguno).
+    source: Optional[str] = None
+    # Optional actionable hint shown next to the status (e.g. Docker Desktop).
+    hint: str = ""
 
 
 class ServicesResponse(BaseModel):

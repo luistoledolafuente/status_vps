@@ -6,7 +6,11 @@ Resolution order:
 3. If no manager is accessible, a controlled response with available=False.
 
 `get_services_with_tracking` also resolves the status of configured
-tracked services (nginx, docker, ...) including "not installed".
+tracked services (nginx, docker, ...). Each tracked service is resolved
+first through systemd units and, when not found, through a probe
+(docker socket/CLI, process lookup) so services like Docker Desktop work
+even without a systemd unit. The resolution source and an actionable hint
+are attached to every tracked entry.
 """
 
 import os
@@ -25,6 +29,23 @@ _STATE_LABELS = {
     "reloading": "Recargando",
     "registered": "Registrado",
 }
+
+# Binary name used to probe well-known services when no systemd unit exists.
+_SVC_BINARIES = {
+    "nginx": "nginx",
+    "ssh": "sshd",
+    "cron": "cron",
+    "redis": "redis-server",
+    "postgresql": "postgres",
+    "mysql": "mysqld",
+    "mongodb": "mongod",
+}
+
+_DOCKER_HINT = (
+    "Docker no es accesible desde este entorno. Si usas Docker Desktop, "
+    "activa la integración WSL en Settings → Resources → WSL integration "
+    "(o instala el cliente docker en esta distro)."
+)
 
 
 def _translate(state: str) -> str:
@@ -182,28 +203,72 @@ def get_services() -> ServicesResponse:
     )
 
 
+def _probe_docker() -> tuple[str, str, str]:
+    """Docker status when no systemd unit exists (Docker Desktop, dockerd)."""
+    # Socket present → daemon is reachable (Docker Desktop integration on).
+    if os.path.exists("/var/run/docker.sock"):
+        code, _stdout, _stderr = _safe_run(["docker", "info", "--format", "{{.ServerVersion}}"])
+        if code == 0:
+            return "active", "Activo", "docker"
+        return "unreachable", "Sin acceso", "docker"
+    if shutil.which("docker") is None:
+        return "not_found", "No instalado", "ninguno"
+    code, _stdout, _stderr = _safe_run(["docker", "info", "--format", "{{.ServerVersion}}"])
+    if code == 0:
+        return "active", "Activo", "docker"
+    return "unreachable", "Sin acceso", "docker"
+
+
+def _probe_by_process(name: str) -> tuple[str, str, str]:
+    """Falls back to process lookup for well-known service binaries."""
+    binary = _SVC_BINARIES.get(name)
+    if not binary or shutil.which(binary) is None:
+        return "not_found", "No instalado", "ninguno"
+    code, _stdout, _stderr = _safe_run(["pgrep", "-x", binary])
+    if code == 0:
+        return "active", "Activo", "proceso"
+    return "inactive", "Inactivo", "proceso"
+
+
 def _build_tracked(services: list[ServiceInfo], names: list[str]) -> list[TrackedService]:
+    """Per-name status: systemd unit first, then a probe (docker / process)."""
     by_name = {service.name: service for service in services}
     tracked = []
     for name in names:
         service = by_name.get(f"{name}.service")
-        if service is None:
-            tracked.append(
-                TrackedService(name=name, state="not_found", label="No instalado", active_state=None)
-            )
-        elif service.active_state == "failed":
-            tracked.append(
-                TrackedService(name=name, state="failed", label="Fallido", active_state="failed")
-            )
-        else:
-            tracked.append(
-                TrackedService(
-                    name=name,
-                    state=service.active_state,
-                    label=service.label,
-                    active_state=service.active_state,
+        if service is not None:
+            if service.active_state == "failed":
+                tracked.append(
+                    TrackedService(
+                        name=name,
+                        state="failed",
+                        label="Fallido",
+                        active_state="failed",
+                        source="systemd",
+                    )
                 )
+            else:
+                tracked.append(
+                    TrackedService(
+                        name=name,
+                        state=service.active_state,
+                        label=service.label,
+                        active_state=service.active_state,
+                        source="systemd",
+                    )
+                )
+            continue
+        if name == "docker":
+            state, label, source = _probe_docker()
+            hint = _DOCKER_HINT if state == "unreachable" else ""
+            tracked.append(
+                TrackedService(name=name, state=state, label=label, source=source, hint=hint)
             )
+            continue
+        state, label, source = _probe_by_process(name)
+        tracked.append(
+            TrackedService(name=name, state=state, label=label, source=source)
+        )
     return tracked
 
 

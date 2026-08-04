@@ -44,10 +44,24 @@ export default function App() {
         <Page data={data} />
       </main>
 
-      <footer className="mx-auto max-w-7xl px-4 pb-8 text-center text-xs text-slate-400 sm:px-6">
-        <p>
-          System Status · API v{data.health.data?.version ?? "—"} · respuesta {data.health.data?.avg_response_ms != null ? `${data.health.data.avg_response_ms} ms` : "—"} · clientes WebSocket: {data.health.data?.ws_clients ?? "—"} · en vivo por WebSocket
-        </p>
+      <footer className="mx-auto max-w-7xl px-4 pb-8 sm:px-6">
+        <div className="flex flex-wrap items-center justify-center gap-2 rounded-2xl bg-white px-4 py-3 text-xs text-slate-500 shadow-sm ring-1 ring-slate-200">
+          <span className="font-semibold text-slate-700">System Status</span>
+          <span aria-hidden="true">·</span>
+          <span>
+            API v<span className="font-data">{data.health.data?.version ?? "—"}</span>
+          </span>
+          <span aria-hidden="true">·</span>
+          <span>
+            respuesta <span className="font-data">{data.health.data?.avg_response_ms != null ? `${data.health.data.avg_response_ms} ms` : "—"}</span>
+          </span>
+          <span aria-hidden="true">·</span>
+          <span>
+            <span className="font-data">{data.health.data?.ws_clients ?? "—"}</span> clientes WebSocket
+          </span>
+          <span aria-hidden="true">·</span>
+          <span className="text-teal-700">En vivo por WebSocket</span>
+        </div>
       </footer>
     </div>
   );

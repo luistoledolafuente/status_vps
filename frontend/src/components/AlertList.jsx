@@ -15,7 +15,7 @@ const SEVERITY_VARIANT = {
 function AlertRow({ alert }) {
   const resolved = alert.state === "resolved";
   return (
-    <li className={`flex flex-col gap-2 px-4 py-3 ${resolved ? "opacity-70" : ""}`}>
+    <li className={`flex flex-col gap-2 px-4 py-3 transition-colors hover:bg-slate-50 ${resolved ? "opacity-70" : ""}`}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <Badge variant={SEVERITY_VARIANT[alert.severity] ?? "info"}>
@@ -23,7 +23,7 @@ function AlertRow({ alert }) {
           </Badge>
           <p className="text-sm font-semibold text-slate-800">{alert.title}</p>
         </div>
-        <span className="text-xs text-slate-400">
+        <span className="font-data text-xs text-slate-400">
           {formatDateTime(alert.last_seen)}
           {resolved ? ` · resuelta ${formatDateTime(alert.resolved_at)}` : ""}
         </span>

@@ -44,7 +44,7 @@ export function ProcessTable({ processes = [], loading, sortBy, onSortChange, se
           onClick={() => onSortChange(option.value)}
           className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
             sortBy === option.value
-              ? "bg-indigo-600 text-white"
+              ? "bg-teal-600 text-white"
               : "bg-slate-100 text-slate-600 hover:bg-slate-200"
           }`}
         >
@@ -67,7 +67,7 @@ export function ProcessTable({ processes = [], loading, sortBy, onSortChange, se
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Buscar proceso o usuario…"
-            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2 text-sm text-slate-700 placeholder:text-slate-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2 text-sm text-slate-700 placeholder:text-slate-400 focus:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-100"
           />
         </div>
       ) : null}
@@ -93,25 +93,23 @@ export function ProcessTable({ processes = [], loading, sortBy, onSortChange, se
             </thead>
             <tbody>
               {filtered.slice(0, visible).map((process) => (
-                <tr key={process.pid} className="border-b border-slate-100 last:border-0">
+                <tr key={process.pid} className="border-b border-slate-100 transition-colors last:border-0 hover:bg-slate-50">
                   <td className="py-2.5 pr-2">
                     <p className="font-medium text-slate-800">{process.name}</p>
                     <p className="text-xs text-slate-400">{process.username}</p>
                   </td>
-                  <td className="py-2.5 pr-2 font-mono text-slate-600">{process.pid}</td>
+                  <td className="font-data py-2.5 pr-2 text-slate-600">{process.pid}</td>
                   <td className="hidden py-2.5 pr-2 sm:table-cell">
                     <span className="text-xs text-slate-500">
                       {STATUS_LABELS[process.status] ?? process.status}
                     </span>
                   </td>
-                  <td className="py-2.5 pr-2 text-right">
-                    <span className={`font-mono ${process.cpu_percent > 50 ? "text-rose-600" : "text-slate-700"}`}>
+                  <td className="font-data py-2.5 pr-2 text-right">
+                    <span className={`${process.cpu_percent > 50 ? "text-rose-600" : "text-slate-700"}`}>
                       {formatPercent(process.cpu_percent, 1)}
                     </span>
                   </td>
-                  <td className="py-2.5 text-right">
-                    <span className="font-mono text-slate-700">{formatBytes(process.memory_rss_bytes, 0)}</span>
-                  </td>
+                  <td className="font-data py-2.5 text-right text-slate-700">{formatBytes(process.memory_rss_bytes, 0)}</td>
                 </tr>
               ))}
             </tbody>

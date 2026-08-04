@@ -45,7 +45,7 @@ const IconClock = (
 function severityGradient(percent) {
   if (percent >= 90) return "rose";
   if (percent >= 80) return "amber";
-  return "indigo";
+  return "teal";
 }
 
 export function KPIGrid({ summary, loading }) {
@@ -90,10 +90,10 @@ export function KPIGrid({ summary, loading }) {
 
       <MetricCard
         title="Almacenamiento"
-        value={disk ? formatPercent(disk.percent) : "—"}
+        value={disk ? formatPercent(disk.percent, 1) : "—"}
         subtitle={
           disk
-            ? `${formatBytes(disk.free_bytes)} disponibles de ${formatBytes(disk.total_bytes)}`
+            ? `${formatBytes(disk.used_bytes)} de ${formatBytes(disk.total_bytes)} en ${disk.mountpoint}${summary?.disks?.length > 1 ? ` · ${summary.disks.length} particiones` : ""}`
             : "No disponible"
         }
         progress={disk?.percent}
@@ -121,7 +121,7 @@ export function KPIGrid({ summary, loading }) {
             ? `Carga: ${loadAvg.one_min.toFixed(1)} · ${loadAvg.five_min.toFixed(1)} · ${loadAvg.fifteen_min.toFixed(1)}`
             : summary?.hostname ?? "Cargando…"
         }
-        gradient="indigo"
+        gradient="teal"
         icon={IconClock}
       />
     </div>

@@ -56,10 +56,17 @@ def get_memory_info() -> dict:
     }
 
 
+# Filesystems that are not real block storage (WSL mounts, network shares,
+# read-only media like the docker-desktop CLI iso or snap squashfs images).
+_SKIPPED_FSTYPES = {"9p", "drvfs", "fuse.sshfs", "iso9660", "squashfs"}
+
+
 def get_disks() -> list[dict]:
-    """Usage of every mounted partition; unreadable ones are skipped."""
+    """Usage of every mounted local partition; unreadable or remote ones are skipped."""
     disks = []
     for partition in psutil.disk_partitions(all=False):
+        if partition.fstype in _SKIPPED_FSTYPES:
+            continue
         try:
             usage = psutil.disk_usage(partition.mountpoint)
         except (PermissionError, OSError):
@@ -68,6 +75,8 @@ def get_disks() -> list[dict]:
             {
                 "partition": partition.device or "desconocido",
                 "mountpoint": partition.mountpoint,
+                "fstype": partition.fstype or "desconocido",
+                "is_root": partition.mountpoint == os.sep,
                 "total_bytes": usage.total,
                 "used_bytes": usage.used,
                 "free_bytes": usage.free,
@@ -81,6 +90,8 @@ def get_disks() -> list[dict]:
                 {
                     "partition": "/",
                     "mountpoint": "/",
+                    "fstype": "local",
+                    "is_root": True,
                     "total_bytes": usage.total,
                     "used_bytes": usage.used,
                     "free_bytes": usage.free,
@@ -89,6 +100,7 @@ def get_disks() -> list[dict]:
             )
         except (PermissionError, OSError):
             pass
+    disks.sort(key=lambda d: (not d["is_root"], -d["total_bytes"]))
     return disks
 
 
