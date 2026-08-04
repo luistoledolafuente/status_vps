@@ -48,15 +48,188 @@ EOF
 
 Reinicia WSL desde Windows (`wsl --shutdown`) y vuelve a arrancar backend y frontend.
 
-## 5. Despliegue en producción
+## 5. Despliegue en producción (VPS)
+
+Todo el despliegue se hace desde tu equipo conectándote al VPS por SSH:
 
 ```bash
-cp backend/.env.example backend/.env   # ajusta los valores
-docker compose up --build
+ssh usuario@IP_DEL_VPS        # o con clave: ssh -i ~/.ssh/ida_luca usuario@IP_DEL_VPS
 ```
 
-- Frontend: `http://localhost:5173` (nginx sirve la aplicación y proxya REST + WebSocket)
-- Backend: `http://localhost:8000`
+> Si el VPS tiene firewall (UFW), abre el puerto del frontend cuando corresponda:
+> `sudo ufw allow 5173/tcp` (Docker) o `sudo ufw allow 80/tcp` (manual con nginx en 80).
+
+### 5.1 Prerrequisitos
+
+Sobre un VPS Ubuntu/Debian:
+
+```bash
+sudo apt update && sudo apt upgrade -y
+sudo apt install -y git
+```
+
+**Para la ruta A (Docker):**
+
+```bash
+sudo apt install -y docker.io docker-compose-v2 docker-buildx-plugin
+sudo systemctl enable --now docker
+sudo usermod -aG docker $USER   # vuelve a entrar por SSH para aplicar el grupo
+```
+
+**Para la ruta B (manual):**
+
+```bash
+sudo apt install -y python3-venv python3-pip nodejs npm nginx
+```
+
+### 5.2 Clonar el repositorio
+
+```bash
+git clone https://github.com/luistoledolafuente/status_vps.git
+cd status_vps
+```
+
+### 5.3 Opción A: Docker (recomendado)
+
+1. Crea el archivo de configuración y ajústalo:
+
+```bash
+cp backend/.env.example backend/.env
+nano backend/.env
+```
+
+2. Cambia al menos estas variables para producción:
+
+| Variable | Valor recomendado |
+|---|---|
+| `SYSSTATUS_ENV` | `production` |
+| `SYSSTATUS_AUTH_ENABLED` | `true` (o `false` si es red privada) |
+| `SYSSTATUS_ADMIN_PASSWORD` / `VIEWER_PASSWORD` | contraseñas fuertes |
+| `SYSSTATUS_JWT_SECRET` | `openssl rand -hex 32` |
+| `SYSSTATUS_WEBHOOK_URL` | URL de tu webhook (vacío = desactivado) |
+| `SYSSTATUS_TRACKED_SERVICES` | los servicios de tu servidor |
+| `SYSSTATUS_CHECKS` | tus objetivos de disponibilidad |
+| `SYSSTATUS_TRAFFIC_QUOTA_GB` | la cuota de tu plan |
+
+3. Levanta todo (compila el frontend y levanta backend + nginx):
+
+```bash
+docker compose up --build -d
+```
+
+4. Verifica:
+
+```bash
+curl http://localhost:5173/api/health     # -> {"status":"ok",...}
+docker compose ps
+docker compose logs -f backend            # registros en vivo
+```
+
+5. Abre **`http://IP_DEL_VPS:5173`** (nginx sirve el SPA y proxya REST + WebSocket al backend, todo en el mismo origen, sin CORS).
+
+**Actualizar** después de un `git pull`:
+
+```bash
+git pull && docker compose up --build -d
+```
+
+**Apagar / reiniciar**:
+
+```bash
+docker compose down        # detiene contenedores
+docker compose restart     # reinicia sin recompilar
+```
+
+### 5.4 Opción B: Manual (sin Docker)
+
+**Backend** (puerto 8000):
+
+```bash
+cd backend
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+nano .env                  # mismos valores que la ruta A
+uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+Para probar primero: `curl http://localhost:8000/api/health`.
+
+**Frontend** (compila el SPA a `frontend/dist/`):
+
+```bash
+cd ../frontend
+npm ci
+npm run build
+```
+
+**nginx** sirve `dist/` y proxya REST + WebSocket al backend. Crea `/etc/nginx/sites-available/status`:
+
+```nginx
+server {
+    listen 80;
+    server_name _;
+    root /home/USUARIO/status_vps/frontend/dist;
+    index index.html;
+
+    location /api/ {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+
+    # WebSocket: obligatorio el header de upgrade
+    location /ws/ {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+    }
+
+    location / {
+        try_files $uri /index.html;
+    }
+}
+```
+
+Habilítalo:
+
+```bash
+sudo ln -s /etc/nginx/sites-available/status /etc/nginx/sites-enabled/
+sudo rm -f /etc/nginx/sites-enabled/default
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+Abre **`http://IP_DEL_VPS`** (puerto 80).
+
+**Recomendado:** arrancar el backend como servicio systemd (`/etc/systemd/system/sysstatus-backend.service`):
+
+```ini
+[Unit]
+Description=System Status backend
+After=network.target
+
+[Service]
+WorkingDirectory=/home/USUARIO/status_vps/backend
+ExecStart=/home/USUARIO/status_vps/backend/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
+Restart=always
+User=USUARIO
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+sudo systemctl enable --now sysstatus-backend
+sudo systemctl restart sysstatus-backend   # tras cada actualización del backend
+```
+
+> Recuerda: en Docker el frontend vive en `http://IP_DEL_VPS:5173`; en la ruta manual sirve en el puerto 80.
 
 ## 6. Uso del panel
 
