@@ -40,8 +40,12 @@ real (Docker incluido).
   `/api/metrics/history` para rellenar las gráficas.
 - **Observabilidad interna**: tiempo de respuesta promedio, clientes WebSocket,
   errores del recolector y última recolección en `/api/health`.
-- **Modo en vivo seleccionable**: WebSocket o Polling, con indicador de estado
-  (conectado / reconectando / desconectado).
+- **En vivo por WebSocket**: KPIs y gráficas se actualizan vía un único
+  WebSocket (`/ws/metrics`, cada 2 s) con reconexión automática e indicador de
+  estado (conectado / reconectando / desconectado). No hay polling.
+- **Datos secundarios bajo demanda (REST)**: procesos, servicios, alertas y
+  salud se consultan al cargar la página y al cambiar de pestaña (o de
+  ordenación), nunca en intervalos automáticos.
 
 ## Estructura del proyecto
 
@@ -84,10 +88,9 @@ system_status_vps/
 │       ├── api/client.js             # capa única de REST
 │       ├── hooks/
 │       │   ├── useWebSocket.js       # conexión, reconexión con backoff, estado
-│       │   ├── usePolling.js         # polling con loading/error/refresh
-│       │   └── useDashboardData.js   # orquesta fuentes + histórico de gráficas
+│       │   └── useDashboardData.js   # orquesta WS + datos REST bajo demanda
 │       ├── components/
-│       │   ├── layout/AppHeader.jsx  # tabs + selector de modo + estado WS
+│       │   ├── layout/AppHeader.jsx  # tabs + estado de la conexión WS
 │       │   ├── ui/                   # Card, Badge, StatusDot, EmptyState, ErrorBanner, Skeleton
 │       │   ├── KPIGrid.jsx, MetricCard.jsx, SystemCharts.jsx
 │       │   ├── ProcessTable.jsx, ServiceStatusList.jsx, AlertList.jsx
@@ -216,34 +219,34 @@ Prefijo `SYSSTATUS_`, archivo `backend/.env` (ver `.env.example`). Las más rele
 > Antes de exponerlo a Internet: HTTPS (proxy inverso), cambiar `JWT_SECRET` y
 > contraseñas, habilitar auth, y considerar rate limiting + firewall.
 
-## Polling vs WebSocket — comparación y decisión
+## WebSocket primero — decisión de arquitectura
+
+El frontend consume **únicamente WebSocket** para los datos en vivo. No existe
+modo polling ni fallback: si el WebSocket se cae, se reconecta con backoff
+exponencial (1 s → 10 s máx) y la UI muestra el estado de la conexión. El
+resumen (KPIs + gráficas) llega por push cada 2 s.
+
+Los datos secundarios (procesos, servicios, alertas, salud) se obtienen por
+REST **bajo demanda**: al cargar la página y al cambiar de pestaña u
+ordenación. Esto mantiene la carga del servidor baja y evita el desperdicio de
+peticiones periódicas, conservando la robustez de HTTP para datos gruesos.
+
+**Por qué WebSocket y no polling:**
 
 | Criterio | Polling (REST) | WebSocket |
 |---|---|---|
 | Latencia | Depende del intervalo (2 s mínimo razonable) | Push inmediato (máximo ~2 s en este diseño) |
 | Carga de red | N cabeceras HTTP por tick y por cliente (overhead por petición) | 1 conexión persistente, frames ligeros; menor overhead total |
 | Carga del servidor | Coste fijo por petición; crece linealmente con los clientes | Coste por conexión + broadcast; escala bien con pocos clientes |
-| Simplicidad | Trivial: fetch + setInterval, cachés y proxies HTTP lo entienden | Reintentos, backoff, estados de conexión, proxies con timeout |
-| Fiabilidad | Se auto-recupera (cada petición es independiente) | Requiere lógica de reconexión (implementada) |
+| Fiabilidad | Se auto-recupera (cada petición es independiente) | Requiere lógica de reconexión (implementada con backoff) |
 | Backpressure | El cliente se auto-regula (intervalo) | El servidor debe manejar clientes lentos (broadcast con try/except) |
 | Caché/proxies | Compatible con HTTP cache | No aplica |
-| Caso de uso | Datos gruesos, histórico, cargas puntuales | Métricas que cambian cada segundo |
 
-**Conclusión para este proyecto**: con 2 s de actualización y pocos clientes
-concurrentes, el WebSocket gana en experiencia (sin parpadeos, sin peticiones
-repetidas) pero el polling es más simple y robusto en entornos con proxies
-estrictos. **Se implementa una estrategia híbrida**:
-
-1. **WebSocket** para el resumen en vivo (KPIs + gráficas), con reconexión y
-   *fallback* manual a polling si la conexión falla.
-2. **REST** para datos gruesos o poco volátiles: procesos y servicios cada 10 s,
-   alertas cada 5 s, salud cada 10 s.
-3. **REST `/history`** al cargar la página para rellenar las gráficas con el
-   pasado reciente (el histórico del servidor, no solo lo visto en sesión).
-
-Si algún día hay decenas de clientes, el broadcast ya no recoge métricas por
-cliente (una sola recolección compartida), por lo que el coste marginal por
-conexión es mínimo.
+El histórico (`REST /history`) se consulta al cargar la página para rellenar
+las gráficas con el pasado reciente (snapshots del servidor, no solo lo visto
+en la sesión). Si algún día hay decenas de clientes, el broadcast no recoge
+métricas por cliente (una sola recolección compartida), por lo que el coste
+marginal por conexión es mínimo.
 
 ## Decisiones técnicas
 

@@ -18,8 +18,7 @@ const PAGES = {
 
 export default function App() {
   const [tab, setTab] = useState("dashboard");
-  const [mode, setMode] = useState("ws");
-  const data = useDashboardData({ mode });
+  const data = useDashboardData({ tab });
 
   const Page = PAGES[tab] ?? Dashboard;
 
@@ -28,8 +27,6 @@ export default function App() {
       <AppHeader
         tab={tab}
         onTabChange={setTab}
-        mode={mode}
-        onModeChange={setMode}
         wsStatus={data.wsStatus}
         wsAttempts={data.wsAttempts}
         lastUpdated={data.lastUpdated}
@@ -40,11 +37,7 @@ export default function App() {
           <ErrorBanner
             error={data.error}
             onRetry={() => window.location.reload()}
-            hint={
-              mode === "ws"
-                ? "Sugerencia: cambia al modo Polling desde el selector superior."
-                : "Verifica que el backend esté corriendo en el puerto 8000."
-            }
+            hint="Verifica que el backend esté corriendo en el puerto 8000 y recarga la página."
           />
         ) : null}
 
@@ -53,7 +46,7 @@ export default function App() {
 
       <footer className="mx-auto max-w-7xl px-4 pb-8 text-center text-xs text-slate-400 sm:px-6">
         <p>
-          System Status · API v{data.health.data?.version ?? "—"} · respuesta {data.health.data?.avg_response_ms != null ? `${data.health.data.avg_response_ms} ms` : "—"} · clientes WebSocket: {data.health.data?.ws_clients ?? "—"} · modo: {mode === "ws" ? "WebSocket" : "Polling"}
+          System Status · API v{data.health.data?.version ?? "—"} · respuesta {data.health.data?.avg_response_ms != null ? `${data.health.data.avg_response_ms} ms` : "—"} · clientes WebSocket: {data.health.data?.ws_clients ?? "—"} · en vivo por WebSocket
         </p>
       </footer>
     </div>

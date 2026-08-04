@@ -1,11 +1,12 @@
-// Central dashboard hook: combines the live source (WebSocket or polling)
-// with REST data (processes, services, alerts) and the history backfill.
+// Central dashboard hook: live data arrives exclusively over WebSocket;
+// the secondary datasets (processes, services, alerts, health) are fetched
+// on demand via REST (on mount, on tab change, on sort change) — never on a
+// fixed interval, so there is no polling anywhere.
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api/client";
 import { config } from "../config";
 import { maxDiskPercent } from "../utils/format";
-import { usePolling } from "./usePolling";
 import { useWebSocket } from "./useWebSocket";
 
 const LIVE_MAX_POINTS = 200;
@@ -21,7 +22,35 @@ function toPoint(summary, at = new Date()) {
   };
 }
 
-export function useDashboardData({ mode }) {
+// On-demand REST fetch: runs when refresh() is called, never on an interval.
+function useOnDemand(fetcher) {
+  const [data, setData] = useState(null);
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  const fetcherRef = useRef(fetcher);
+  fetcherRef.current = fetcher;
+  const runningRef = useRef(false);
+
+  const refresh = useCallback(async () => {
+    if (runningRef.current) return;
+    runningRef.current = true;
+    try {
+      const result = await fetcherRef.current();
+      setData(result);
+      setError(null);
+    } catch (err) {
+      setError(err);
+    } finally {
+      runningRef.current = false;
+      setLoading(false);
+    }
+  }, []);
+
+  return { data, error, loading, refresh };
+}
+
+export function useDashboardData({ tab } = {}) {
   const [liveSummary, setLiveSummary] = useState(null);
   const [chartPoints, setChartPoints] = useState([]);
   const [backfill, setBackfill] = useState([]);
@@ -35,10 +64,9 @@ export function useDashboardData({ mode }) {
     });
   }, []);
 
-  // --- Live summary -----------------------------------------------------
+  // --- Live summary: WebSocket only ---------------------------------------
   const ws = useWebSocket({
     url: config.wsUrl,
-    enabled: mode === "ws",
     onMessage: (message) => {
       if (message?.type === "metrics") {
         setLiveSummary(message.data);
@@ -48,18 +76,7 @@ export function useDashboardData({ mode }) {
     },
   });
 
-  const summaryPoll = usePolling(() => api.summary(), {
-    enabled: mode === "polling",
-    intervalMs: 2000,
-  });
-
-  useEffect(() => {
-    if (mode === "polling" && summaryPoll.data) {
-      appendPoint(summaryPoll.data);
-    }
-  }, [mode, summaryPoll.data, appendPoint]);
-
-  // --- History backfill (server-side snapshots) --------------------------
+  // --- History backfill (server-side snapshots) ----------------------------
   useEffect(() => {
     let active = true;
     api
@@ -84,29 +101,39 @@ export function useDashboardData({ mode }) {
     };
   }, []);
 
-  // --- REST datasets ------------------------------------------------------
+  // --- REST datasets (on demand, no polling) --------------------------------
   const fetchProcesses = useCallback(
     () => api.processes({ limit: 12, sortBy: processSort }),
     [processSort]
   );
+  const processes = useOnDemand(fetchProcesses);
+  const services = useOnDemand(() => api.services());
+  const alerts = useOnDemand(() => api.alerts());
+  const health = useOnDemand(() => api.health());
 
-  const processes = usePolling(fetchProcesses, { intervalMs: 10000 });
-  const services = usePolling(() => api.services(), { intervalMs: 10000 });
-  const alerts = usePolling(() => api.alerts(), { intervalMs: 5000 });
-  const health = usePolling(() => api.health(), { intervalMs: 10000 });
+  // Load everything on mount and refresh when the active tab changes.
+  useEffect(() => {
+    processes.refresh();
+    services.refresh();
+    alerts.refresh();
+    health.refresh();
+  }, [tab, processes.refresh, services.refresh, alerts.refresh, health.refresh]);
+
+  // Reload the process list when the sort order changes.
+  useEffect(() => {
+    processes.refresh();
+  }, [processSort, processes.refresh]);
 
   const refreshProcesses = useCallback((sortBy) => setProcessSort(sortBy), []);
 
   // --- Derived state --------------------------------------------------------
-  const summary = mode === "ws" ? liveSummary : summaryPoll.data;
+  const summary = liveSummary;
   const loading = !summary;
   const error =
-    mode === "ws"
-      ? ws.status === "disconnected" && !liveSummary
-        ? { message: "No se pudo conectar por WebSocket. Intenta el modo Polling." }
-        : null
-      : summaryPoll.error;
-  const lastUpdated = mode === "ws" ? wsMessageAt : summaryPoll.lastUpdated;
+    ws.status === "disconnected" && !liveSummary
+      ? { message: "No se pudo conectar con el servidor por WebSocket." }
+      : null;
+  const lastUpdated = wsMessageAt;
 
   const history = useMemo(() => {
     const merged = [...backfill, ...chartPoints];
@@ -122,7 +149,6 @@ export function useDashboardData({ mode }) {
     history,
     wsStatus: ws.status,
     wsAttempts: ws.attempts,
-    mode,
     error,
     loading,
     lastUpdated,

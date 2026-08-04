@@ -1,4 +1,4 @@
-// Top navigation: branding, tabs, live-mode selector and WS/polling status.
+// Top navigation: branding, tabs and live WebSocket connection status.
 
 import { StatusDot } from "../ui/StatusDot";
 
@@ -9,41 +9,7 @@ const TABS = [
   { id: "alerts", label: "Alertas" },
 ];
 
-function ModeSelector({ mode, onChange }) {
-  const options = [
-    { value: "ws", label: "En vivo (WebSocket)", hint: "Actualización cada 2 s." },
-    { value: "polling", label: "Polling", hint: "Consulta cada 2 s." },
-  ];
-  return (
-    <div className="inline-flex rounded-xl bg-slate-100 p-1" role="group" aria-label="Modo de actualización">
-      {options.map((option) => (
-        <button
-          key={option.value}
-          type="button"
-          title={option.hint}
-          onClick={() => onChange(option.value)}
-          className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-            mode === option.value
-              ? "bg-white text-indigo-700 shadow-sm ring-1 ring-slate-200"
-              : "text-slate-500 hover:text-slate-700"
-          }`}
-        >
-          {option.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function ConnectionStatus({ mode, wsStatus, wsAttempts, lastUpdated }) {
-  if (mode === "polling") {
-    return (
-      <div className="inline-flex items-center gap-2 rounded-xl bg-slate-100 px-3 py-1.5">
-        <StatusDot state="connected" label="Polling activo" />
-      </div>
-    );
-  }
-
+function ConnectionStatus({ wsStatus, wsAttempts, lastUpdated }) {
   const labels = {
     connecting: "Conectando…",
     connected: "Conectado",
@@ -57,7 +23,7 @@ function ConnectionStatus({ mode, wsStatus, wsAttempts, lastUpdated }) {
   );
 }
 
-export function AppHeader({ tab, onTabChange, mode, onModeChange, wsStatus, wsAttempts, lastUpdated }) {
+export function AppHeader({ tab, onTabChange, wsStatus, wsAttempts, lastUpdated }) {
   return (
     <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/95 backdrop-blur">
       <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6">
@@ -75,8 +41,7 @@ export function AppHeader({ tab, onTabChange, mode, onModeChange, wsStatus, wsAt
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <ConnectionStatus mode={mode} wsStatus={wsStatus} wsAttempts={wsAttempts} lastUpdated={lastUpdated} />
-          <ModeSelector mode={mode} onChange={onModeChange} />
+          <ConnectionStatus wsStatus={wsStatus} wsAttempts={wsAttempts} lastUpdated={lastUpdated} />
         </div>
       </div>
 
