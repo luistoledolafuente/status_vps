@@ -79,8 +79,12 @@ sudo usermod -aG docker $USER   # vuelve a entrar por SSH para aplicar el grupo
 **Para la ruta B (manual):**
 
 ```bash
-sudo apt install -y python3-venv python3-pip nodejs npm nginx
+sudo apt install -y python3-venv python3-pip nginx
 ```
+
+> Si `node`/`npm` no existen: `sudo apt install -y nodejs npm`. Si ya vienen de
+> NodeSource, **no** los instales con apt (el paquete `nodejs` choca con `npm`);
+> confirma con `node -v && npm -v`.
 
 ### 5.2 Clonar el repositorio
 
