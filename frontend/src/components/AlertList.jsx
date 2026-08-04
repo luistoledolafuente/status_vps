@@ -59,7 +59,10 @@ export function AlertList({ response, loading }) {
         `Memoria > ${thresholds.memory_critical}%`,
         `Disco > ${thresholds.disk_warning}%`,
         `Disco > ${thresholds.disk_critical}%`,
-      ]
+      ].concat(
+        thresholds.traffic_warning != null ? [`Tráfico > ${thresholds.traffic_warning}% de cuota`, `Tráfico > ${thresholds.traffic_critical}% de cuota`] : [],
+        thresholds.anomaly_critical != null ? [`Anomalía > ${thresholds.anomaly_critical} puntos`] : []
+      )
     : [];
 
   return (

@@ -1,9 +1,12 @@
-// Resumen: KPIs, gráficas de tendencia, procesos y servicios principales.
+// Resumen: KPIs, salud del servidor, tendencias, procesos y servicios.
 
 import { KPIGrid } from "../components/KPIGrid";
 import { SystemCharts } from "../components/SystemCharts";
 import { ProcessTable } from "../components/ProcessTable";
 import { ServiceStatusList } from "../components/ServiceStatusList";
+import { TrafficCard } from "../components/TrafficCard";
+import { AnomalyCard } from "../components/AnomalyCard";
+import { AvailabilityChecks } from "../components/AvailabilityChecks";
 
 function SectionHeading({ children }) {
   return (
@@ -17,6 +20,19 @@ export function Dashboard({ data }) {
       <section className="space-y-3">
         <SectionHeading>Resumen en vivo</SectionHeading>
         <KPIGrid summary={data.summary} loading={data.loading} />
+      </section>
+
+      <section className="space-y-3">
+        <SectionHeading>Salud del servidor</SectionHeading>
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <AnomalyCard anomaly={data.summary?.anomaly} />
+          <TrafficCard traffic={data.summary?.traffic} network={data.summary?.network} />
+        </div>
+      </section>
+
+      <section className="space-y-3">
+        <SectionHeading>Disponibilidad</SectionHeading>
+        <AvailabilityChecks checks={data.summary?.checks ?? []} loading={data.loading} />
       </section>
 
       <section className="space-y-3">

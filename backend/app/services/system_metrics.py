@@ -57,7 +57,7 @@ def get_memory_info() -> dict:
 
 
 # Filesystems that are not real block storage (WSL mounts, network shares,
-# read-only media like the docker-desktop CLI iso or snap squashfs images).
+# read-only media like container CLI images or snap squashfs images).
 _SKIPPED_FSTYPES = {"9p", "drvfs", "fuse.sshfs", "iso9660", "squashfs"}
 
 
@@ -149,16 +149,21 @@ def get_network_info(previous=None, previous_ts: Optional[float] = None) -> Opti
         return None
     now = time.monotonic()
     sent_bps = recv_bps = None
+    delta_sent = delta_recv = 0
     if previous is not None and previous_ts is not None:
         elapsed = now - previous_ts
         if elapsed > 0:
-            sent_bps = max(0, io.bytes_sent - previous.bytes_sent) / elapsed
-            recv_bps = max(0, io.bytes_recv - previous.bytes_recv) / elapsed
+            delta_recv = max(0, io.bytes_recv - previous.bytes_recv)
+            delta_sent = max(0, io.bytes_sent - previous.bytes_sent)
+            sent_bps = delta_sent / elapsed
+            recv_bps = delta_recv / elapsed
     return {
         "bytes_sent": io.bytes_sent,
         "bytes_recv": io.bytes_recv,
         "sent_bps": round(sent_bps, 1) if sent_bps is not None else None,
         "recv_bps": round(recv_bps, 1) if recv_bps is not None else None,
+        "delta_sent": delta_sent,
+        "delta_recv": delta_recv,
         "state": (io, now),
     }
 

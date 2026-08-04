@@ -42,6 +42,31 @@ class NetworkInfo(BaseModel):
     recv_bps: Optional[float] = None
 
 
+class TrafficInfo(BaseModel):
+    month: str
+    sent_bytes: int
+    recv_bytes: int
+    total_bytes: int
+    quota_bytes: Optional[int] = None
+    percent: Optional[float] = None
+
+
+class AnomalyInfo(BaseModel):
+    score: float
+    level: Literal["normal", "elevated", "high", "critical"]
+    critical_threshold: float = 80.0
+    metrics: dict[str, float] = {}
+
+
+class CheckInfo(BaseModel):
+    name: str
+    target: str = ""
+    state: Literal["up", "down", "unknown"] = "unknown"
+    latency_ms: Optional[float] = None
+    checked_at: Optional[str] = None
+    error: Optional[str] = None
+
+
 class SummaryMetrics(BaseModel):
     hostname: str
     platform: str
@@ -53,6 +78,9 @@ class SummaryMetrics(BaseModel):
     uptime_human: str
     boot_time_iso: str
     network: Optional[NetworkInfo] = None
+    traffic: Optional[TrafficInfo] = None
+    anomaly: Optional[AnomalyInfo] = None
+    checks: list[CheckInfo] = []
     collected_at: str
 
 

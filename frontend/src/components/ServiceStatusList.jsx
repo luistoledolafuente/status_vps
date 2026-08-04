@@ -1,7 +1,7 @@
-// Service status: tracked services (nginx, docker, ...) plus full list with
-// search and state filters. Tracked services are always shown — resolved via
-// systemd, docker socket/CLI or process lookup — with the detection source
-// and an actionable hint when a service is present but unreachable.
+// Service status: tracked services plus full list with search and state
+// filters. Tracked services are always shown — resolved via systemd, daemon
+// socket/CLI or process lookup — with the detection source and an actionable
+// hint when a service is present but unreachable.
 
 import { useMemo, useState } from "react";
 import { Badge } from "./ui/Badge";
@@ -45,7 +45,7 @@ function StatusPill({ state, label }) {
 const SOURCE_LABELS = {
   systemd: "systemd",
   sysv: "init.d",
-  docker: "socket/CLI de Docker",
+  docker: "socket/CLI",
   proceso: "proceso",
   ninguno: "sin fuente",
 };

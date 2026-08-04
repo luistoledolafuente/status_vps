@@ -31,6 +31,9 @@ class AlertThresholds(BaseModel):
     memory_critical: float
     disk_warning: float
     disk_critical: float
+    traffic_warning: Optional[float] = None
+    traffic_critical: Optional[float] = None
+    anomaly_critical: Optional[float] = None
 
 
 class AlertsResponse(BaseModel):

@@ -6,11 +6,11 @@ Resolution order:
 3. If no manager is accessible, a controlled response with available=False.
 
 `get_services_with_tracking` also resolves the status of configured
-tracked services (nginx, docker, ...). Each tracked service is resolved
+tracked services (nginx, postgresql, ...). Each tracked service is resolved
 first through systemd units and, when not found, through a probe
-(docker socket/CLI, process lookup) so services like Docker Desktop work
-even without a systemd unit. The resolution source and an actionable hint
-are attached to every tracked entry.
+(daemon socket/CLI, process lookup) so container engines and other
+services work even without a systemd unit. The resolution source and an
+actionable hint are attached to every tracked entry.
 """
 
 import os
@@ -42,9 +42,9 @@ _SVC_BINARIES = {
 }
 
 _DOCKER_HINT = (
-    "Docker no es accesible desde este entorno. Si usas Docker Desktop, "
-    "activa la integración WSL en Settings → Resources → WSL integration "
-    "(o instala el cliente docker en esta distro)."
+    "El motor de contenedores no es accesible desde este entorno: no se "
+    "detecta el socket de control ni el cliente de línea de comandos. "
+    "Verifica que el servicio esté activo y que el socket sea accesible."
 )
 
 
@@ -204,8 +204,8 @@ def get_services() -> ServicesResponse:
 
 
 def _probe_docker() -> tuple[str, str, str]:
-    """Docker status when no systemd unit exists (Docker Desktop, dockerd)."""
-    # Socket present → daemon is reachable (Docker Desktop integration on).
+    """Container engine status when no systemd unit exists."""
+    # Socket present → daemon is reachable.
     if os.path.exists("/var/run/docker.sock"):
         code, _stdout, _stderr = _safe_run(["docker", "info", "--format", "{{.ServerVersion}}"])
         if code == 0:

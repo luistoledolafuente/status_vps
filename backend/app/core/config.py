@@ -7,6 +7,7 @@ source of truth for application settings.
 
 from functools import lru_cache
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -48,6 +49,8 @@ class Settings(BaseSettings):
     # --- History -----------------------------------------------------------
     history_max_points: int = 3600
     history_snapshot_seconds: int = 15
+    history_db_path: str = "data/history.db"
+    history_retention_days: int = 30
 
     # --- Alert thresholds (percentages) -----------------------------------
     alert_cpu_warning: float = 80.0
@@ -57,8 +60,52 @@ class Settings(BaseSettings):
     alert_disk_warning: float = 80.0
     alert_disk_critical: float = 90.0
 
+    # --- Alert behavior ----------------------------------------------------
+    # Seconds a threshold must stay breached before an alert fires (avoids
+    # false alarms on momentary spikes).
+    alert_sustain_seconds: float = 30.0
+
+    # --- Webhook notifications (empty URL disables) -----------------------
+    webhook_url: str = ""
+    webhook_timeout_seconds: int = 10
+
+    # --- Monthly traffic vs. plan quota (0 GB disables) --------------------
+    traffic_quota_gb: float = 0.0
+    traffic_warning_percent: float = 80.0
+    traffic_critical_percent: float = 95.0
+
+    # --- Availability checks ("name=http://host:port,ssh=tcp://host:22") --
+    checks_raw: str = Field(default="", validation_alias="SYSSTATUS_CHECKS")
+    checks_interval_seconds: float = 30.0
+
+    @property
+    def checks(self) -> list[tuple[str, str]]:
+        """Parses the checks configuration into (name, target) pairs.
+
+        Entries use the form `name=target`; the target must include an
+        explicit scheme: http(s):// for HTTP probes or tcp:// for TCP ones.
+        Malformed entries are skipped.
+        """
+        parsed: list[tuple[str, str]] = []
+        for entry in self.checks_raw.split(","):
+            entry = entry.strip()
+            if not entry:
+                continue
+            name, sep, target = entry.partition("=")
+            name = name.strip()
+            target = target.strip()
+            if not sep or not name or not target:
+                continue
+            if target.startswith(("http://", "https://", "tcp://")):
+                parsed.append((name, target))
+        return parsed
+
+    # --- Anomaly score ------------------------------------------------------
+    anomaly_critical: float = 80.0
+    anomaly_window_minutes: int = 120
+
     # --- Tracked services (comma-separated list) --------------------------
-    tracked_services_raw: str = "nginx,docker,postgresql,redis,ssh,cron"
+    tracked_services_raw: str = "nginx,postgresql,redis,ssh,cron"
 
     @property
     def tracked_services(self) -> list[str]:

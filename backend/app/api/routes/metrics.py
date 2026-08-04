@@ -7,8 +7,9 @@ from fastapi import APIRouter, Depends, Query
 
 from ...core.config import settings
 from ...schemas.metrics import HistoryResponse, ProcessesResponse, SummaryMetrics
-from ..deps import get_alert_service, get_collector, get_history, rate_limit
+from ..deps import get_alert_service, get_checks, get_collector, get_history, rate_limit
 from ...services.alerts import AlertService
+from ...services.checks import CheckService
 from ...services.collector import MetricsCollector
 from ...services.history import HistoryStore
 
@@ -28,11 +29,12 @@ def get_summary(
     collector: MetricsCollector = Depends(get_collector),
     history: HistoryStore = Depends(get_history),
     alerts: AlertService = Depends(get_alert_service),
+    checks: CheckService = Depends(get_checks),
 ) -> dict:
-    """Resumen completo: CPU, memoria, disco por partición, red, uptime y carga."""
+    """Resumen completo: CPU, memoria, disco, red, tráfico mensual, salud y disponibilidad."""
     summary = collector.collect_summary()
     history.record(summary)
-    alerts.evaluate(summary=summary, services=None)
+    alerts.evaluate(summary=summary, services=None, checks=checks.snapshot())
     return summary
 
 
@@ -67,7 +69,7 @@ def get_history(
     since: Optional[str] = Query(default=None, description="Filtra puntos posteriores a este ISO timestamp"),
     history: HistoryStore = Depends(get_history),
 ) -> HistoryResponse:
-    """Histórico de snapshots (CPU, memoria, disco, red). Almacenamiento: memoria."""
+    """Histórico de snapshots (CPU, memoria, disco, red). Almacenamiento: SQLite + memoria."""
     return HistoryResponse(
         storage=history.STORAGE_NAME,
         interval_seconds=history.snapshot_seconds,

@@ -8,6 +8,9 @@ venv/
 __pycache__/
 *.pyc
 
+# Base de datos del histórico
+backend/data/
+
 # Variables de entorno
 .env
 

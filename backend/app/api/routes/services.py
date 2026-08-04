@@ -16,7 +16,7 @@ def list_services(
     alerts: AlertService = Depends(get_alert_service),
 ) -> ServicesResponse:
     """Servicios del sistema (systemd/SysV) con degradación controlada y
-    estado de los servicios en seguimiento (nginx, docker, ...)."""
+    estado de los servicios en seguimiento (nginx, postgresql, ...)."""
     response = collector.collect_services()
     alerts.evaluate(summary=None, services=response)
     return response

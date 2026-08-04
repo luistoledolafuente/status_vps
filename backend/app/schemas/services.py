@@ -30,9 +30,9 @@ class TrackedService(BaseModel):
     ]
     label: str
     active_state: Optional[str] = None
-    # How the state was resolved (systemd / sysv / docker / proceso / ninguno).
+    # How the state was resolved (systemd / sysv / socket / proceso / ninguno).
     source: Optional[str] = None
-    # Optional actionable hint shown next to the status (e.g. Docker Desktop).
+    # Optional actionable hint shown next to the status.
     hint: str = ""
 
 

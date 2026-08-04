@@ -14,8 +14,10 @@ from ..core import security
 from ..core.config import settings
 from ..schemas.auth import UserInfo
 from ..services.alerts import AlertService
+from ..services.checks import CheckService
 from ..services.collector import MetricsCollector
 from ..services.history import HistoryStore
+from ..services.notifications import WebhookNotifier
 
 
 # --- App state helpers ------------------------------------------------------
@@ -30,6 +32,14 @@ def get_history(request: Request) -> HistoryStore:
 
 def get_alert_service(request: Request) -> AlertService:
     return request.app.state.alerts
+
+
+def get_checks(request: Request) -> CheckService:
+    return request.app.state.checks
+
+
+def get_notifier(request: Request) -> WebhookNotifier:
+    return request.app.state.notifier
 
 
 def get_observability_state(request: Request) -> dict:

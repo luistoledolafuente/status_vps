@@ -23,9 +23,13 @@ from .api.routes import websocket as ws_routes
 from .api.deps import get_current_user
 from .core.config import settings
 from .core.logging import setup_logging
+from .services import system_metrics
 from .services.alerts import AlertService
+from .services.checks import CheckService
 from .services.collector import MetricsCollector
 from .services.history import HistoryStore
+from .services.notifications import WebhookNotifier
+from .services.storage import TrafficTracker
 from .ws.manager import manager as ws_manager
 
 logger = logging.getLogger("app.main")
@@ -35,15 +39,25 @@ RESPONSE_TIMES: deque = deque(maxlen=50)
 
 
 async def _broadcast_loop(app: FastAPI) -> None:
-    """Pushes live summaries to connected WebSocket clients."""
+    """Collects metrics continuously and pushes live summaries to clients.
+
+    Collection, history recording and alert evaluation run on every tick
+    regardless of connected clients, so alerts and notifications work even
+    when nobody is watching the dashboard.
+    """
     while True:
         try:
+            await app.state.checks.run_if_due()
+            collector: MetricsCollector = app.state.collector
+            summary = collector.collect_summary()
+            await asyncio.to_thread(app.state.history.record, summary)
+            app.state.alerts.evaluate(
+                summary=summary,
+                services=None,
+                checks=app.state.checks.snapshot(),
+            )
+            app.state.last_broadcast_at = summary["collected_at"]
             if ws_manager.count() > 0:
-                collector: MetricsCollector = app.state.collector
-                summary = collector.collect_summary()
-                app.state.history.record(summary)
-                app.state.alerts.evaluate(summary=summary, services=None)
-                app.state.last_broadcast_at = summary["collected_at"]
                 await ws_manager.broadcast({"type": "metrics", "data": summary})
         except Exception:  # noqa: BLE001 - the loop must never die
             logger.exception("broadcast loop error")
@@ -54,17 +68,45 @@ async def _broadcast_loop(app: FastAPI) -> None:
 async def lifespan(app: FastAPI):
     setup_logging(settings.log_level)
     app.state.started_at = time.monotonic()
-    app.state.collector = MetricsCollector(settings, logger)
-    app.state.history = HistoryStore(
+
+    history = HistoryStore(
         max_points=settings.history_max_points,
         snapshot_seconds=settings.history_snapshot_seconds,
+        db_path=settings.history_db_path,
+        retention_days=settings.history_retention_days,
     )
-    app.state.alerts = AlertService(settings, logger)
+    traffic = TrafficTracker(history.sqlite_store)
+    checks = CheckService(settings, logger)
+    notifier = WebhookNotifier(
+        url=settings.webhook_url,
+        timeout_seconds=settings.webhook_timeout_seconds,
+        hostname=system_metrics.get_hostname(),
+        logger=logger,
+    )
+
+    app.state.collector = MetricsCollector(
+        settings, logger,
+        history=history,
+        traffic=traffic,
+        checks=checks,
+    )
+    app.state.history = history
+    app.state.checks = checks
+    app.state.notifier = notifier
+    app.state.alerts = AlertService(settings, logger, notifier=notifier)
     app.state.ws_manager = ws_manager
     app.state.response_times = RESPONSE_TIMES
     app.state.last_broadcast_at = None
     app.state.broadcast_task = asyncio.create_task(_broadcast_loop(app))
-    logger.info("application started", extra={"event": "startup", "environment": settings.environment})
+    logger.info(
+        "application started",
+        extra={
+            "event": "startup",
+            "environment": settings.environment,
+            "storage": history.STORAGE_NAME,
+            "webhook_enabled": notifier.enabled,
+        },
+    )
     yield
     app.state.broadcast_task.cancel()
     try:
