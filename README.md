@@ -57,7 +57,7 @@ ssh usuario@IP_DEL_VPS        # o con clave: ssh -i ~/.ssh/ida_luca usuario@IP_D
 ```
 
 > Si el VPS tiene firewall (UFW), abre el puerto del frontend cuando corresponda:
-> `sudo ufw allow 5173/tcp` (Docker) o `sudo ufw allow 80/tcp` (manual con nginx en 80).
+> `sudo ufw allow 5173/tcp` (Docker) o `sudo ufw allow 8090/tcp` (manual con nginx; `setup.sh` lo hace solo).
 
 ### 5.1 Prerrequisitos
 
@@ -146,7 +146,7 @@ docker compose restart     # reinicia sin recompilar
 
 ### 5.4 Opción B: Manual (sin Docker)
 
-**Backend** (puerto 8000):
+**1. Backend** (una sola vez):
 
 ```bash
 cd backend
@@ -155,85 +155,39 @@ source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
 nano .env                  # mismos valores que la ruta A
-uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
-Para probar primero: `curl http://localhost:8000/api/health`.
-
-**Frontend** (compila el SPA a `frontend/dist/`):
+**2. Desplegar** (build del frontend + nginx en puerto 8090 + servicio systemd):
 
 ```bash
-cd ../frontend
-npm ci
-npm run build
+cd ..
+bash deploy/setup.sh
 ```
 
-**nginx** sirve `dist/` y proxya REST + WebSocket al backend. Crea `/etc/nginx/sites-available/status`:
+El script:
 
-```nginx
-server {
-    listen 80;
-    server_name _;
-    root /home/USUARIO/status_vps/frontend/dist;
-    index index.html;
+- copia `deploy/sysstatus-backend.service` a systemd y lo arranca (backend ligado a `127.0.0.1:8000`, solo accesible vía nginx);
+- compila el frontend y copia `dist/` a `/var/www/status` (evita el 500 de permisos al servir desde `/home/`);
+- instala `deploy/nginx-status.conf` como sitio `status` en el **puerto 8090** y recarga nginx;
+- abre `8090/tcp` en UFW si está activo.
 
-    location /api/ {
-        proxy_pass http://127.0.0.1:8000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    }
+Abre **`http://IP_DEL_VPS:8090`**. El puerto 8090 evita chocar con webs existentes en el 80/443.
 
-    # WebSocket: obligatorio el header de upgrade
-    location /ws/ {
-        proxy_pass http://127.0.0.1:8000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_read_timeout 3600s;
-        proxy_send_timeout 3600s;
-    }
-
-    location / {
-        try_files $uri /index.html;
-    }
-}
-```
-
-Habilítalo:
+**Actualizar** después de un `git pull`:
 
 ```bash
-sudo ln -s /etc/nginx/sites-available/status /etc/nginx/sites-enabled/
-sudo rm -f /etc/nginx/sites-enabled/default
-sudo nginx -t && sudo systemctl reload nginx
+git pull
+bash deploy/setup.sh      # rebuild + recarga del sitio y del servicio
 ```
 
-Abre **`http://IP_DEL_VPS`** (puerto 80).
-
-**Recomendado:** arrancar el backend como servicio systemd (`/etc/systemd/system/sysstatus-backend.service`):
-
-```ini
-[Unit]
-Description=System Status backend
-After=network.target
-
-[Service]
-WorkingDirectory=/home/USUARIO/status_vps/backend
-ExecStart=/home/USUARIO/status_vps/backend/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
-Restart=always
-User=USUARIO
-
-[Install]
-WantedBy=multi-user.target
-```
+**Verificar:**
 
 ```bash
-sudo systemctl enable --now sysstatus-backend
-sudo systemctl restart sysstatus-backend   # tras cada actualización del backend
+curl http://localhost:8090/api/health      # -> {"status":"ok",...}
+curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8090/   # 200
 ```
 
-> Recuerda: en Docker el frontend vive en `http://IP_DEL_VPS:5173`; en la ruta manual sirve en el puerto 80.
+> Recuerda: en Docker el frontend vive en `http://IP_DEL_VPS:5173`; en la ruta manual sirve en el puerto 8090.
 
 ## 6. Uso del panel
 
@@ -293,6 +247,8 @@ Con `SYSSTATUS_AUTH_ENABLED=true`, autentícate en `POST /api/auth/token` (usuar
 | Las comprobaciones no aparecen | Verifica el formato de `SYSSTATUS_CHECKS` (`nombre=objetivo` con esquema `http://`, `https://` o `tcp://`). |
 | El tráfico mensual no muestra cuota | Configura `SYSSTATUS_TRAFFIC_QUOTA_GB` con la cuota de tu plan. |
 | El score de salud está en 0 | Es normal: necesita al menos ~30 minutos de histórico para establecer la línea base. |
+| nginx da 500 al abrir el panel (manual) | El dist se sirve desde `/var/www/status` (ver `deploy/setup.sh`); nginx no puede leer rutas dentro de `/home/`. |
+| El panel no aparece (manual) | Verifica `systemctl status sysstatus-backend nginx` y que el sitio `status` esté en `sites-enabled` (el script lo crea). |
 
 ## Endpoints principales
 
