@@ -73,7 +73,20 @@ function ThemeToggle({ theme, onThemeChange }) {
   );
 }
 
-export function AppHeader({ tab, onTabChange, wsStatus, wsAttempts, lastUpdated, theme, onThemeChange }) {
+function UserMenu({ username, onLogout }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="hidden text-xs text-muted sm:inline">
+        <span className="font-data text-foreground">{username}</span>
+      </span>
+      <Button variant="secondary" size="sm" onPress={onLogout} title="Cerrar sesión">
+        Salir
+      </Button>
+    </div>
+  );
+}
+
+export function AppHeader({ tab, onTabChange, wsStatus, wsAttempts, lastUpdated, theme, onThemeChange, username, onLogout }) {
   return (
     <header className="sticky top-0 z-10 border-b border-border bg-surface/95 backdrop-blur">
       <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6">
@@ -96,6 +109,7 @@ export function AppHeader({ tab, onTabChange, wsStatus, wsAttempts, lastUpdated,
         <div className="flex flex-wrap items-center gap-3">
           <ConnectionStatus wsStatus={wsStatus} wsAttempts={wsAttempts} lastUpdated={lastUpdated} />
           <ThemeToggle theme={theme} onThemeChange={onThemeChange} />
+          {onLogout ? <UserMenu username={username} onLogout={onLogout} /> : null}
         </div>
       </div>
 

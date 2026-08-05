@@ -1,6 +1,7 @@
 // HTTP client for the monitoring API (single layer for all REST calls).
 
 import { config } from "../config";
+import { loadSession, notifySessionExpired } from "../auth/session";
 
 export class ApiError extends Error {
   constructor(message, status) {
@@ -10,11 +11,16 @@ export class ApiError extends Error {
   }
 }
 
+function authHeaders() {
+  const token = loadSession()?.access_token;
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 async function request(path, options = {}) {
   let response;
   try {
     response = await fetch(`${config.apiBase}${path}`, {
-      headers: { Accept: "application/json", ...(options.headers ?? {}) },
+      headers: { Accept: "application/json", ...authHeaders(), ...(options.headers ?? {}) },
       ...options,
     });
   } catch {
@@ -25,8 +31,12 @@ async function request(path, options = {}) {
     try {
       const body = await response.json();
       if (body?.detail) detail = body.detail;
+      else if (body?.message) detail = Array.isArray(body.message) ? body.message.join(", ") : body.message;
     } catch {
       // keep the generic message
+    }
+    if (response.status === 401 && path !== "/api/auth/token") {
+      notifySessionExpired();
     }
     throw new ApiError(detail, response.status);
   }

@@ -1,11 +1,13 @@
 [Unit]
-Description=System Status backend
+Description=System Status backend (NestJS)
 After=network.target
 
 [Service]
-WorkingDirectory=/home/rodrigo/project/vps/status_vps/backend
-ExecStart=/home/rodrigo/project/vps/status_vps/backend/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
+Type=simple
+WorkingDirectory=/home/rodrigo/project/vps/status_vps/backend-node
+ExecStart=/usr/bin/node dist/main.js
 Restart=always
+RestartSec=3
 User=rodrigo
 
 [Install]

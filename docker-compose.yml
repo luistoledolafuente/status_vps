@@ -1,9 +1,9 @@
 services:
   backend:
-    build: ./backend
+    build: ./backend-node
     container_name: sysstatus-backend
     env_file:
-      - ./backend/.env
+      - ./backend-node/.env
     ports:
       - "8000:8000"
     restart: unless-stopped

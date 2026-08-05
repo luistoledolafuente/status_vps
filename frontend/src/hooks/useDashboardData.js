@@ -5,7 +5,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api/client";
-import { config } from "../config";
+import { config, wsUrlWithToken } from "../config";
+import { loadSession } from "../auth/session";
 import { maxDiskPercent } from "../utils/format";
 import { useWebSocket } from "./useWebSocket";
 
@@ -50,7 +51,7 @@ function useOnDemand(fetcher) {
   return { data, error, loading, refresh };
 }
 
-export function useDashboardData({ tab } = {}) {
+export function useDashboardData({ tab, enabled = true } = {}) {
   const [liveSummary, setLiveSummary] = useState(null);
   const [chartPoints, setChartPoints] = useState([]);
   const [backfill, setBackfill] = useState([]);
@@ -65,8 +66,10 @@ export function useDashboardData({ tab } = {}) {
   }, []);
 
   // --- Live summary: WebSocket only ---------------------------------------
+  const token = loadSession()?.access_token ?? null;
   const ws = useWebSocket({
-    url: config.wsUrl,
+    url: wsUrlWithToken(config.wsUrl, token),
+    enabled: enabled && Boolean(token),
     onMessage: (message) => {
       if (message?.type === "metrics") {
         setLiveSummary(message.data);
@@ -78,6 +81,7 @@ export function useDashboardData({ tab } = {}) {
 
   // --- History backfill (server-side snapshots) ----------------------------
   useEffect(() => {
+    if (!enabled) return undefined;
     let active = true;
     api
       .history({ limit: 200 })
@@ -113,16 +117,18 @@ export function useDashboardData({ tab } = {}) {
 
   // Load everything on mount and refresh when the active tab changes.
   useEffect(() => {
+    if (!enabled) return;
     processes.refresh();
     services.refresh();
     alerts.refresh();
     health.refresh();
-  }, [tab, processes.refresh, services.refresh, alerts.refresh, health.refresh]);
+  }, [tab, enabled, processes.refresh, services.refresh, alerts.refresh, health.refresh]);
 
   // Reload the process list when the sort order changes.
   useEffect(() => {
+    if (!enabled) return;
     processes.refresh();
-  }, [processSort, processes.refresh]);
+  }, [enabled, processSort, processes.refresh]);
 
   const refreshProcesses = useCallback((sortBy) => setProcessSort(sortBy), []);
 

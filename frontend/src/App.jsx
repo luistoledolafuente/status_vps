@@ -1,6 +1,6 @@
-// App root: navigation tabs + shared dashboard data + footer with observability.
+// App root: session gate + navigation tabs + shared dashboard data + footer.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTheme } from "@heroui/react";
 import { AppHeader } from "./components/layout/AppHeader";
 import { ErrorBanner } from "./components/ui/ErrorBanner";
@@ -9,6 +9,8 @@ import { Dashboard } from "./pages/Dashboard";
 import { ProcessesPage } from "./pages/ProcessesPage";
 import { ServicesPage } from "./pages/ServicesPage";
 import { AlertsPage } from "./pages/AlertsPage";
+import { LoginPage } from "./pages/LoginPage";
+import { clearSession, loadSession, SESSION_EXPIRED_EVENT } from "./auth/session";
 
 const PAGES = {
   dashboard: Dashboard,
@@ -18,9 +20,26 @@ const PAGES = {
 };
 
 export default function App() {
+  const [session, setSession] = useState(loadSession());
   const [tab, setTab] = useState("dashboard");
-  const data = useDashboardData({ tab });
+  const data = useDashboardData({ tab, enabled: Boolean(session) });
   const { resolvedTheme, setTheme } = useTheme("system");
+
+  useEffect(() => {
+    const handleExpired = () => setSession(null);
+    window.addEventListener(SESSION_EXPIRED_EVENT, handleExpired);
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, handleExpired);
+  }, []);
+
+  if (!session) {
+    return <LoginPage onAuthenticated={setSession} />;
+  }
+
+  const handleLogout = () => {
+    clearSession();
+    setSession(null);
+    setTab("dashboard");
+  };
 
   const Page = PAGES[tab] ?? Dashboard;
 
@@ -34,6 +53,8 @@ export default function App() {
         lastUpdated={data.lastUpdated}
         theme={resolvedTheme}
         onThemeChange={setTheme}
+        username={session.username}
+        onLogout={handleLogout}
       />
 
       <main className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6">

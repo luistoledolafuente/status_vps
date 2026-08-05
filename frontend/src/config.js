@@ -6,6 +6,12 @@ function defaultWsUrl() {
   return `${protocol}://${window.location.host}/ws/metrics`;
 }
 
+export function wsUrlWithToken(baseUrl, token) {
+  if (!token) return baseUrl;
+  const separator = baseUrl.includes("?") ? "&" : "?";
+  return `${baseUrl}${separator}token=${encodeURIComponent(token)}`;
+}
+
 export const config = {
   apiBase: import.meta.env.VITE_API_BASE_URL ?? "",
   wsUrl: import.meta.env.VITE_WS_URL ?? defaultWsUrl(),
