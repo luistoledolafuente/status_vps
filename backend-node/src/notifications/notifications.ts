@@ -1,4 +1,6 @@
 import { createTransport, type Transporter } from 'nodemailer';
+import { render } from 'react-email';
+import { AlertEmail } from './templates/AlertEmail';
 
 interface AlertEvent {
   event?: string;
@@ -198,11 +200,30 @@ export class EmailNotifier implements NotifierChannel {
     if (!this.enabled || !this.transporter) return false;
     const subject = `[${(event.severity ?? 'alerta').toUpperCase()}] ${event.title} — ${this.hostname}`;
     const text = formatLines(event, this.hostname);
-    const html = `<html><body style="font-family:sans-serif">${text
-      .split('\n')
-      .filter((l) => l.trim())
-      .map((l) => `<p>${l}</p>`)
-      .join('')}</body></html>`;
+    let html: string;
+    try {
+      html = await render(
+        AlertEmail({
+          event: event.event,
+          severity: event.severity,
+          title: event.title,
+          message: event.message,
+          tip: event.tip,
+          metric: event.metric,
+          value: event.value,
+          threshold: event.threshold,
+          hostname: this.hostname,
+          timestamp: nowIso(),
+        }),
+      );
+    } catch (renderErr) {
+      this.logger.warn(`email template render failed: ${String(renderErr)}`);
+      html = `<html><body style="font-family:sans-serif">${text
+        .split('\n')
+        .filter((l) => l.trim())
+        .map((l) => `<p>${l}</p>`)
+        .join('')}</body></html>`;
+    }
     try {
       await this.transporter.sendMail({
         from: this.fromEmail,
@@ -262,5 +283,11 @@ export class NotificationHub {
       }
     }
     return results;
+  }
+
+  async sendTestOne(kind: string): Promise<Record<string, boolean>> {
+    const channel = this.channels.find((c) => c.kind === kind && c.enabled);
+    if (!channel) return { [kind]: false };
+    return { [kind]: await channel.sendTest() };
   }
 }

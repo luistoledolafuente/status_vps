@@ -21,7 +21,7 @@ export function StatusDot({ state, label, className = "" }) {
   const pulse = PULSE.has(state) ? "status-pulse" : "";
   return (
     <span className={`inline-flex items-center gap-2 ${className}`}>
-      <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${color} ${pulse}`} />
+      <span className={`h-2.5 w-2.5 shrink-0 rounded-full ring-2 ring-background/80 ${color} ${pulse}`} />
       {label ? <span className="text-sm font-medium text-muted">{label}</span> : null}
     </span>
   );

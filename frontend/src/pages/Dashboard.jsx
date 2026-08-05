@@ -10,7 +10,10 @@ import { AvailabilityChecks } from "../components/AvailabilityChecks";
 
 function SectionHeading({ children }) {
   return (
-    <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400">{children}</h2>
+    <h2 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted">
+      <span aria-hidden className="h-3 w-1 rounded-full bg-gradient-to-b from-accent to-accent/30" />
+      {children}
+    </h2>
   );
 }
 

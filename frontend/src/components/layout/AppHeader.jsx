@@ -19,7 +19,7 @@ function ConnectionStatus({ wsStatus, wsAttempts, lastUpdated }) {
   };
   return (
     <div
-      className="inline-flex items-center gap-2 rounded-xl bg-surface-secondary px-3 py-1.5"
+      className="inline-flex items-center gap-2 rounded-xl bg-surface-secondary px-3 py-1.5 ring-1 ring-border"
       title={lastUpdated ? `Último dato: ${lastUpdated.toLocaleTimeString("es-ES")}` : undefined}
     >
       <StatusDot state={wsStatus} label={labels[wsStatus] ?? labels.disconnected} />
@@ -88,10 +88,10 @@ function UserMenu({ username, onLogout }) {
 
 export function AppHeader({ tab, onTabChange, wsStatus, wsAttempts, lastUpdated, theme, onThemeChange, username, onLogout }) {
   return (
-    <header className="sticky top-0 z-10 border-b border-border bg-surface/95 backdrop-blur">
+    <header className="sticky top-0 z-10 relative border-b border-border bg-surface/85 backdrop-blur after:pointer-events-none after:absolute after:inset-x-0 after:bottom-[-1px] after:h-px after:bg-gradient-to-r after:from-transparent after:via-accent/40 after:to-transparent">
       <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-teal-500 to-cyan-600 text-white shadow-sm">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-teal-500 to-cyan-600 text-white shadow-[0_6px_16px_-6px] shadow-cyan-600/50 ring-1 ring-white/20">
             <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M4 5h16M4 12h16M4 19h10" strokeLinecap="round" />
               <circle cx="20" cy="19" r="2" />

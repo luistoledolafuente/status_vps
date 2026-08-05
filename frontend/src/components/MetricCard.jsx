@@ -26,10 +26,18 @@ export function MetricCard({
       : null;
 
   return (
-    <div className="flex h-full min-h-[136px] flex-col rounded-2xl bg-surface p-4 shadow-surface transition-shadow hover:shadow-overlay">
+    <div className="relative flex h-full min-h-[136px] flex-col overflow-hidden rounded-2xl bg-surface p-4 shadow-surface ring-1 ring-border transition-shadow hover:shadow-overlay">
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent/50 to-transparent"
+      />
       <div className="flex items-center justify-between gap-2">
         <p className="text-[13px] font-medium uppercase tracking-wide text-muted">{title}</p>
-        {icon ? <span className="text-muted">{icon}</span> : null}
+        {icon ? (
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-surface-secondary text-muted ring-1 ring-border">
+            {icon}
+          </span>
+        ) : null}
       </div>
 
       <p className="mt-2 flex items-baseline gap-1.5">

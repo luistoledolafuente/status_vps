@@ -20,7 +20,7 @@ export function ErrorBanner({ error, onRetry, hint }) {
             </Alert.Description>
           </div>
           {onRetry ? (
-            <Button variant="danger" size="sm" className="shrink-0">
+            <Button variant="danger" size="sm" className="shrink-0" onPress={onRetry}>
               Reintentar
             </Button>
           ) : null}

@@ -63,6 +63,12 @@ export const api = {
 
   alerts: () => request("/api/alerts"),
 
+  alertChannels: () => request("/api/alerts/channels"),
+
+  testNotification: (channel) => request(`/api/alerts/test?channel=${encodeURIComponent(channel)}`),
+
+  testAllNotifications: () => request("/api/alerts/test"),
+
   login: (username, password) =>
     request("/api/auth/token", {
       method: "POST",

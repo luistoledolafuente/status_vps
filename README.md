@@ -1,29 +1,39 @@
 # System Status
 
-Panel de monitoreo de servidores Linux en tiempo real: CPU, memoria, almacenamiento, red, tráfico mensual, disponibilidad de servicios, detección de anomalías, procesos, servicios (systemd) y alertas con notificaciones por webhook, Telegram y correo. Backend NestJS (TypeScript) con WebSocket, frontend React.
+Panel de monitoreo de servidores Linux en tiempo real: CPU, memoria, disco, red, tráfico mensual, servicios, procesos, detección de anomalías y **alertas por Telegram / correo / webhook**.
+
+- **Backend**: NestJS (TypeScript) + WebSocket → `backend-node/`
+- **Frontend**: React + Vite → `frontend/`
+- **Despliegue**: `deploy/`
 
 ---
 
 ## 1. Requisitos
 
-- Node.js 22+ (usa el `node:sqlite` nativo; sin dependencias compiladas)
-- npm
-- Linux con systemd activado (para el monitoreo de servicios). En WSL2 se debe activar manualmente — ver paso 4.
+| Necesitas | Versión |
+|---|---|
+| **Node.js** | 22 o superior |
+| **npm** | incluido con Node |
+| **Sistema** | Linux (para monitorear servicios systemd). En WSL2 hay que activar systemd (ver [4](#4-trabajar-en-wsl2-opcional)) |
 
-## 2. Backend
+---
+
+## 2. Probar en local (rápido)
+
+> Abre **dos terminales** en la carpeta del proyecto.
+
+**Terminal 1 — Backend:**
 
 ```bash
 cd backend-node
 npm install
 cp .env.example .env
-npm run dev        # compila y arranca (o: npm run build && node dist/main.js)
+npm run dev
 ```
 
-Verifica el estado con `curl http://localhost:8000/api/health` → `{"status":"ok",...}`.
+Debes ver al final algo como: `System Status API listening on 0.0.0.0:8000`.
 
-## 3. Frontend
-
-En otra terminal:
+**Terminal 2 — Frontend:**
 
 ```bash
 cd frontend
@@ -31,236 +41,209 @@ npm install
 npm run dev
 ```
 
-Abre **http://localhost:5173**. En desarrollo, Vite redirige `/api` y `/ws` al backend automáticamente, por lo que REST y WebSocket funcionan sin configuración adicional.
+Abre **http://localhost:5173** en el navegador.
 
-## 4. Activar systemd en WSL2
+> En modo desarrollo el frontend reenvía `/api` y `/ws` al backend solo, no hay que configurar nada más.
 
-Por defecto WSL2 no arranca systemd, por lo que la pestaña **Servicios** mostrará avisos en lugar de estados reales. Para activarlo:
+---
 
-```bash
-sudo tee /etc/wsl.conf > /dev/null <<'EOF'
-[boot]
-systemd=true
-EOF
+## 3. Configurar las notificaciones (Telegram y correo)
+
+Cuando una alerta se activa o se resuelve, se envía automáticamente por **todos** los canales que tengas configurados. Edita `backend-node/.env` (y reinicia el backend después).
+
+> Puedes comprobar un canal desde el panel en **Alertas → Canales de notificación → Enviar prueba**.
+
+### 3.1 Telegram
+
+1. Abre Telegram y busca **@BotFather** → `/newbot` → crea tu bot y guarda el **token**.
+2. Abre tu bot, pulsa **Iniciar** (envía `/start`).
+3. Obtén tu `chat_id` en el navegador con:
+   `https://api.telegram.org/bot<TU_TOKEN>/getUpdates`
+4. En el `.env`:
+
+```ini
+SYSSTATUS_TELEGRAM_BOT_TOKEN=123456789:AAA...tu-token
+SYSSTATUS_TELEGRAM_CHAT_ID=123456789
 ```
 
-Reinicia WSL desde Windows (`wsl --shutdown`) y vuelve a arrancar backend y frontend.
+### 3.2 Correo por SMTP
 
-## 5. Despliegue en producción (VPS)
+**Con Gmail (recomendado):**
 
-Todo el despliegue se hace desde tu equipo conectándote al VPS por SSH:
-
-```bash
-ssh usuario@IP_DEL_VPS        # o con clave: ssh -i ~/.ssh/ida_luca usuario@IP_DEL_VPS
+```env
+SYSSTATUS_SMTP_HOST=smtp.gmail.com
+SYSSTATUS_SMTP_PORT=587
+SYSSTATUS_SMTP_USERNAME=tu-cuenta@gmail.com
+SYSSTATUS_SMTP_PASSWORD=tu-app-password
+SYSSTATUS_SMTP_FROM_EMAIL=tu-cuenta@gmail.com
+SYSSTATUS_SMTP_TO_EMAILS=destino@example.com
 ```
 
-> Si el VPS tiene firewall (UFW), abre el puerto del frontend cuando corresponda:
-> `sudo ufw allow 5173/tcp` (Docker) o `sudo ufw allow 8090/tcp` (manual con nginx; `setup.sh` lo hace solo).
+**Para crear la app password de Gmail:**
+1. https://myaccount.google.com → **Seguridad** → activa **Verificación en 2 pasos**.
+2. Seguridad → **Contraseñas de aplicaciones** → crea una para "SystemStatus".
+3. Usa los 16 caracteres como `SYSSTATUS_SMTP_PASSWORD`.
 
-### 5.1 Prerrequisitos
-
-Sobre un VPS Ubuntu/Debian:
-
-```bash
-sudo apt update && sudo apt upgrade -y
-sudo apt install -y git
+**Para Hotmail/Outlook:**
+```env
+SYSSTATUS_SMTP_HOST=smtp.office365.com
+SYSSTATUS_SMTP_PORT=587
+SYSSTATUS_SMTP_USERNAME=tu-cuenta@hotmail.com
+SYSSTATUS_SMTP_PASSWORD=tu-app-password-o-normal
+SYSSTATUS_SMTP_FROM_EMAIL=tu-cuenta@hotmail.com
+SYSSTATUS_SMTP_TO_EMAILS=destino@example.com
 ```
 
-**Para la ruta A (Docker):**
+> A veces Microsoft bloquea SMTP básico (error `535 5.7.139`) y solo Gmail u otros SMTP funcionan; en ese caso usa Gmail u otro proveedor SMTP.
 
-```bash
-sudo apt install -y docker.io docker-compose-v2 docker-buildx-plugin
-sudo systemctl enable --now docker
-sudo usermod -aG docker $USER   # vuelve a entrar por SSH para aplicar el grupo
+### 3.3 Webhook (opcional)
+
+```env
+SYSSTATUS_WEBHOOK_URL=https://tu-servicio/de/webhook
 ```
 
-**Para la ruta B (manual):**
+Recibe un `POST` JSON con `event`, `severity`, `title`, `message`, `metric`, `value`, `threshold`, `hostname` y `timestamp`.
+
+---
+
+## 4. Despliegue en producción (VPS)
+
+Puedes usar **Docker** (opción A, recomendada) o **manual con nginx** (opción B).
+
+### 4.0 Prepara el VPS
+
+Entra por SSH:
 
 ```bash
-sudo apt install -y nginx
+ssh usuario@IP_DEL_VPS
 ```
 
-> Si `node`/`npm` no existen o son viejos, instálalos desde NodeSource (v22+):
-> `curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt install -y nodejs`.
-
-### 5.2 Clonar el repositorio
+Instala lo básico y clona el repo:
 
 ```bash
+sudo apt update && sudo apt install -y git
 git clone https://github.com/luistoledolafuente/status_vps.git
 cd status_vps
 ```
 
-### 5.3 Opción A: Docker (recomendado)
+### 4.1 Opción A — Docker (recomendado)
 
-1. Crea el archivo de configuración y ajústalo:
+```bash
+sudo apt install -y docker.io docker-compose-v2 docker-buildx-plugin
+sudo systemctl enable --now docker
+sudo usermod -aG docker $USER      # vuelve a entrar por SSH
+```
+
+Copiar y editar la configuración:
 
 ```bash
 cp backend-node/.env.example backend-node/.env
 nano backend-node/.env
 ```
 
-2. Cambia al menos estas variables para producción:
-
-| Variable | Valor recomendado |
-|---|---|
-| `SYSSTATUS_ENV` | `production` |
-| `SYSSTATUS_AUTH_ENABLED` | `true` (o `false` si es red privada) |
-| `SYSSTATUS_ADMIN_PASSWORD` / `VIEWER_PASSWORD` | contraseñas fuertes |
-| `SYSSTATUS_JWT_SECRET` | `openssl rand -hex 32` |
-| `SYSSTATUS_WEBHOOK_URL` | URL de tu webhook (vacío = desactivado) |
-| `SYSSTATUS_TRACKED_SERVICES` | los servicios de tu servidor |
-| `SYSSTATUS_CHECKS` | tus objetivos de disponibilidad |
-| `SYSSTATUS_TRAFFIC_QUOTA_GB` | la cuota de tu plan |
-
-3. Levanta todo (compila el frontend y levanta backend + nginx):
+Levanta todo:
 
 ```bash
 docker compose up --build -d
 ```
 
-4. Verifica:
+Abre **http://IP_DEL_VPS:5173**.
 
-```bash
-curl http://localhost:5173/api/health     # -> {"status":"ok",...}
-docker compose ps
-docker compose logs -f backend            # registros en vivo
-```
-
-5. Abre **`http://IP_DEL_VPS:5173`** (nginx sirve el SPA y proxya REST + WebSocket al backend, todo en el mismo origen, sin CORS).
-
-**Actualizar** después de un `git pull`:
+**Actualizar**:
 
 ```bash
 git pull && docker compose up --build -d
 ```
 
-**Apagar / reiniciar**:
+### 4.2 Opción B — Manual (nginx + systemd)
 
 ```bash
-docker compose down        # detiene contenedores
-docker compose restart     # reinicia sin recompilar
-```
-
-### 5.4 Opción B: Manual (sin Docker)
-
-**1. Backend** (una sola vez):
-
-```bash
+sudo apt install -y nginx          # (ver requisitos de Node 22 si hace falta)
 cd backend-node
 npm ci
 cp .env.example .env
-nano .env                  # mismos valores que la ruta A
+nano .env                         # mismos valores que el local
 cd ..
-```
-
-**2. Desplegar** (build del frontend + nginx en puerto 8090 + servicio systemd):
-
-```bash
 bash deploy/setup.sh
 ```
 
-El script:
+Abre **http://IP_DEL_VPS:8090**.
 
-- instala dependencias y compila `backend-node` (si no existe `.env` lo crea desde `.env.example`);
-- copia `deploy/sysstatus-backend.service` a systemd y lo arranca (`node dist/main.js`, backend ligado a `127.0.0.1:8000`, solo accesible vía nginx);
-- compila el frontend y copia `dist/` a `/var/www/status` (evita el 500 de permisos al servir desde `/home/`);
-- instala `deploy/nginx-status.conf` como sitio `status` en el **puerto 8090** y recarga nginx;
-- abre `8090/tcp` en UFW si está activo.
-
-Abre **`http://IP_DEL_VPS:8090`**. El puerto 8090 evita chocar con webs existentes en el 80/443.
-
-**Actualizar** después de un `git pull`:
+**Actualizar**:
 
 ```bash
 git pull
-bash deploy/setup.sh      # rebuild + recarga del sitio y del servicio
+bash deploy/setup.sh
 ```
 
-**Verificar:**
+---
 
-```bash
-curl http://localhost:8090/api/health      # -> {"status":"ok",...}
-curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8090/   # 200
-```
+## 5. Uso del panel
 
-> Recuerda: en Docker el frontend vive en `http://IP_DEL_VPS:5173`; en la ruta manual sirve en el puerto 8090.
+> El panel pide iniciar sesión (usuarios en `SYSSTATUS_*`). Con `SYSSTATUS_AUTH_ENABLED=true` la API exige un token JWT; con `false` es solo una capa de protección leve.
 
-## 6. Uso del panel
+| Pestaña | Qué muestra |
+|---|---|
+| **Resumen** | KPIs en vivo (cada 2 s por WebSocket), tendencias, disco, tráfico |
+| **Salud** | Score de anomalía (0-100) contra la línea base histórica |
+| **Disponibilidad** | Comprobaciones HTTP/TCP de tus servicios |
+| **Procesos** | Top de procesos por CPU o memoria |
+| **Servicios** | Estado de los servicios systemd |
+| **Alertas** | Canales de notificación con botones de prueba, umbrales, alertas activas y resueltas |
 
-El panel pide **iniciar sesión** (usuario/contraseña de `SYSSTATUS_ADMIN_USERNAME` / `VIEWER_*`). Con `SYSSTATUS_AUTH_ENABLED=true` la API y el WebSocket exigen el token JWT; con `false` la sesión es solo de cortesía.
+---
 
-- **Resumen**: KPIs en vivo (actualización automática cada 2 s por WebSocket), gráficas de tendencia, almacenamiento por partición y tráfico de red.
-- **Salud del servidor**: score de anomalía (0-100) que compara el comportamiento actual contra la línea base histórica, y tráfico del mes vs. la cuota del plan.
-- **Disponibilidad**: comprobaciones HTTP y TCP de tus servicios (nginx, API, puerto SSH…) con tiempo de respuesta.
-- **Procesos**: top por CPU o memoria, con buscador.
-- **Servicios**: seguimiento de los servicios clave, listado completo con filtros por estado y buscador.
-- **Alertas**: umbrales configurados, alertas activas y resueltas recientemente. Las alertas requieren que el umbral se supere durante `SYSSTATUS_ALERT_SUSTAIN_SECONDS` segundos para evitar falsas alarmas.
+## 6. Variables de entorno (`backend-node/.env`)
 
-## 7. Notificaciones (webhook, Telegram y correo)
+Las más importantes (hay otras en `.env.example`):
 
-Las alertas se pueden enviar a **tres canales** a la vez:
-
-- **Webhook genérico** (`SYSSTATUS_WEBHOOK_URL`): `POST` JSON, compatible con Telegram, Discord, Slack, ntfy o un endpoint propio. Cada evento incluye `event` (`alert_raised` / `alert_resolved`), `severity`, `title`, `message`, `metric`, `value`, `threshold`, `hostname` y `timestamp`.
-- **Telegram**: `SYSSTATUS_TELEGRAM_BOT_TOKEN` + `SYSSTATUS_TELEGRAM_CHAT_ID` (Bot API `sendMessage`).
-- **Correo**: `SYSSTATUS_SMTP_*` (SMTP con STARTTLS/TLS; destino `SYSSTATUS_SMTP_TO_EMAILS`, varios separados por comas).
-
-Estado de cada canal en `GET /api/alerts/channels`; prueba manual con `POST /api/alerts/test` (envía una notificación de prueba por cada canal configurado).
-
-## 8. Configuración
-
-Archivo `backend-node/.env` (prefijo `SYSSTATUS_`). Las variables más relevantes:
-
-| Variable | Default | Descripción |
+| Variable | Default | Para qué es |
 |---|---|---|
-| `SYSSTATUS_TRACKED_SERVICES` | `nginx,postgresql,redis,ssh,cron` | Servicios en seguimiento |
-| `SYSSTATUS_ALERT_CPU_WARNING` / `_CRITICAL` | `80` / `90` | Umbrales de CPU (%) |
-| `SYSSTATUS_ALERT_MEMORY_WARNING` / `_CRITICAL` | `80` / `90` | Umbrales de memoria (%) |
-| `SYSSTATUS_ALERT_DISK_WARNING` / `_CRITICAL` | `80` / `90` | Umbrales de disco (%) |
-| `SYSSTATUS_ALERT_SUSTAIN_SECONDS` | `30` | Duración mínima del umbral antes de alertar |
-| `SYSSTATUS_WEBHOOK_URL` | — | Webhook para notificaciones (vacío = desactivado) |
-| `SYSSTATUS_TELEGRAM_BOT_TOKEN` / `SYSSTATUS_TELEGRAM_CHAT_ID` | — | Notificaciones por Telegram |
-| `SYSSTATUS_SMTP_HOST` / `SMTP_PORT` / `SMTP_USERNAME` / `SMTP_PASSWORD` / `SMTP_FROM_EMAIL` / `SMTP_TO_EMAILS` | — | Notificaciones por correo |
-| `SYSSTATUS_TRAFFIC_QUOTA_GB` | `0` | Cuota mensual de transferencia en GB (0 = sin cuota) |
-| `SYSSTATUS_CHECKS` | — | Comprobaciones: `nombre=http://host,ssh=tcp://host:22` |
-| `SYSSTATUS_HISTORY_DB_PATH` | `data/history.db` | Base de datos SQLite del histórico |
-| `SYSSTATUS_ANOMALY_CRITICAL` | `80` | Score de anomalía que dispara alerta |
-| `SYSSTATUS_WS_INTERVAL_SECONDS` | `2` | Frecuencia del envío en vivo |
-| `SYSSTATUS_AUTH_ENABLED` | `false` | Exige autenticación (JWT) en la API |
-| `SYSSTATUS_JWT_SECRET` | — | **Cambiarlo antes de activar auth** |
-| `SYSSTATUS_ADMIN_PASSWORD` / `VIEWER_PASSWORD` | `admin123` / `viewer123` | Credenciales de los roles |
+| `SYSSTATUS_AUTH_ENABLED` | `false` | Exigir sesión (JWT) en la API |
+| `SYSSTATUS_ADMIN_PASSWORD` / `SYSSTATUS_VIEWER_PASSWORD` | `admin123` / `viewer123` | Contraseñas de acceso |
+| `SYSSTATUS_JWT_SECRET` | — | **Cambiar antes de activar auth** |
+| `SYSSTATUS_TELEGRAM_BOT_TOKEN` / `SYSSTATUS_TELEGRAM_CHAT_ID` | — | Bot de Telegram |
+| `SYSSTATUS_SMTP_HOST` / `SYSSTATUS_SMTP_USERNAME` / `SYSSTATUS_SMTP_PASSWORD` / `SYSSTATUS_SMTP_FROM_EMAIL` / `SYSSTATUS_SMTP_TO_EMAILS` | — | Envío de correo |
+| `SYSSTATUS_WEBHOOK_URL` | — | Webhook (vacío = desactivado) |
+| `SYSSTATUS_ALERT_CPU_WARNING` / `SYSSTATUS_ALERT_CPU_CRITICAL` | `80` / `90` | Umbrales de CPU (%) |
+| `SYSSTATUS_ALERT_MEMORY_WARNING` / `SYSSTATUS_ALERT_MEMORY_CRITICAL` | `80` / `90` | Umbrales de memoria (%) |
+| `SYSSTATUS_ALERT_DISK_WARNING` / `SYSSTATUS_ALERT_DISK_CRITICAL` | `80` / `90` | Umbrales de disco (%) |
+| `SYSSTATUS_ALERT_SUSTAIN_SECONDS` | `30` | Segundos seguidos sobre el umbral antes de alertar |
+| `SYSSTATUS_TRAFFIC_QUOTA_GB` | `0` | Cuota mensual en GB (0 = sin cuota) |
+| `SYSSTATUS_CHECKS` | — | `nombre=http://host,ssh=tcp://host:22` |
+| `SYSSTATUS_TRACKED_SERVICES` | `nginx,postgresql,redis,ssh,cron` | Servicios monitoreados |
 
-Con `SYSSTATUS_AUTH_ENABLED=true`, autentícate en `POST /api/auth/token` (usuario/contraseña en form-urlencoded) y usa el token como `Authorization: Bearer <token>`. El WebSocket `/ws/metrics` acepta el token como `?token=...` en la URL.
+---
 
-## 9. Solución de problemas
+## 7. Solución de problemas
 
 | Problema | Solución |
 |---|---|
-| Página en blanco | Recarga con Ctrl+Shift+R (caché del navegador). |
-| `node: sqlite no disponible` | Usa Node.js 22+ (el SQLite nativo se degrada a memoria si falta). |
-| Servicios muestran "no disponible" | Activa systemd (paso 4) o despliega en un servidor Linux real. |
-| El disco marca ~0% | Es correcto en WSL: el disco virtual es enorme y casi vacío. El KPI muestra la partición más usada. |
-| No se conecta el WebSocket (desarrollo) | El primer intento del navegador puede fallar al arrancar Vite; se reconecta solo. Verifica que el backend esté en el puerto 8000. |
-| No conecta con `SYSSTATUS_AUTH_ENABLED=true` | Recarga y vuelve a iniciar sesión: el WS reaparece con `?token=...`; un token expirado cierra la sesión (se vuelve a la pantalla de login). |
-| Servicios muestran "no disponible" | Activa systemd (paso 4) o despliega en un servidor Linux real. |
-| El disco marca ~0% | Es correcto en WSL: el disco virtual es enorme y casi vacío. El KPI muestra la partición más usada. |
-| No se conecta el WebSocket (desarrollo) | El primer intento del navegador puede fallar al arrancar Vite; se reconecta solo. Verifica que el backend esté en el puerto 8000. |
-| Las comprobaciones no aparecen | Verifica el formato de `SYSSTATUS_CHECKS` (`nombre=objetivo` con esquema `http://`, `https://` o `tcp://`). |
-| El tráfico mensual no muestra cuota | Configura `SYSSTATUS_TRAFFIC_QUOTA_GB` con la cuota de tu plan. |
-| El score de salud está en 0 | Es normal: necesita al menos ~30 minutos de histórico para establecer la línea base. |
-| nginx da 500 al abrir el panel (manual) | El dist se sirve desde `/var/www/status` (ver `deploy/setup.sh`); nginx no puede leer rutas dentro de `/home/`. |
-| El panel no aparece (manual) | Verifica `systemctl status sysstatus-backend nginx` y que el sitio `status` esté en `sites-enabled` (el script lo crea). |
+| Página en blanco | Recarga con **Ctrl+Shift+R** (caché). |
+| `node: sqlite no disponible` | Necesitas Node.js 22+. |
+| Servicios "no disponible" | Activa systemd (WSL) o usa un Linux real. |
+| No conecta el WebSocket | Verifica que el backend esté en el puerto 8000; se reconecta solo. |
+| Con `AUTH_ENABLED=true` no conecta | Recarga y vuelve a iniciar sesión (token) y WS lleva `?token=...`. |
+| Las comprobaciones no aparecen | Revisa el formato de `SYSSTATUS_CHECKS` (`nombre=http://...` o `tcp://...`). |
+| Tráfico sin cuota | Pon `SYSSTATUS_TRAFFIC_QUOTA_GB`. |
+| Score de salud en 0 | Es normal: necesita ~30 min de histórico. |
+| Correo falla con `535 5.7.139` | Microsoft bloquea SMTP de esa cuenta; usa Gmail u otro SMTP. |
+| Correo/Telegram no se configuran | Revisa que el backend se **reinició** después de editar `.env` y que los campos estén vacíos no `${...}`. |
+
+---
 
 ## Endpoints principales
 
 | Método | Ruta | Descripción |
 |---|---|---|
-| GET | `/api/health` | Estado + observabilidad (latencia, clientes WebSocket) |
-| GET | `/api/metrics/summary` | CPU, RAM, disco, red, uptime, tráfico mensual, salud y disponibilidad |
-| GET | `/api/metrics/processes?limit=12&sort_by=cpu` | Procesos (`cpu` / `memory` / `name`) |
-| GET | `/api/metrics/history?limit=200` | Histórico para las gráficas |
-| GET | `/api/services` | Servicios + seguimiento |
+| GET | `/api/health` | Estado y observabilidad |
+| GET | `/api/metrics/summary` | CPU, RAM, disco, red, tráfico, salud |
+| GET | `/api/metrics/processes?limit=12&sort_by=cpu` | Procesos |
+| GET | `/api/metrics/history?limit=200` | Histórico de gráficas |
+| GET | `/api/services` | Servicios |
 | GET | `/api/alerts` | Alertas y umbrales |
-| GET | `/api/alerts/channels` | Estado de los canales de notificación (webhook, Telegram, correo) |
-| POST | `/api/alerts/test` | Envía una notificación de prueba por cada canal configurado |
-| POST | `/api/auth/token` | Autenticación JWT (opcional) |
+| GET | `/api/alerts/channels` | Estado de canales |
+| GET | `/api/alerts/test` | Notificación de prueba a todos los canales |
+| GET | `/api/alerts/test?channel=telegram` | Prueba de un canal concreto (`email`, `telegram`, `webhook`) |
+| POST | `/api/auth/token` | Login JWT (opcional) |
 | WS | `/ws/metrics` | Datos en vivo cada 2 s |
