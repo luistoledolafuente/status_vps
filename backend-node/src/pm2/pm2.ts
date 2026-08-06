@@ -3,6 +3,7 @@
 // mismo usuario que gestiona los procesos (en producción, el usuario del VPS).
 
 import { execFile } from 'child_process';
+import * as fs from 'fs';
 import { promisify } from 'util';
 
 const execFileAsync = promisify(execFile);
@@ -31,6 +32,8 @@ export interface Pm2Process {
   cwd: string | null;
   node_version: string | null;
   created_at: number | null;
+  out_log_path: string | null;
+  err_log_path: string | null;
 }
 
 export interface Pm2Response {
@@ -78,6 +81,8 @@ function normalize(item: Record<string, unknown>): Pm2Process | null {
     cwd: typeof env.pm_cwd === 'string' ? env.pm_cwd : null,
     node_version: typeof env.node_version === 'string' ? env.node_version : null,
     created_at: typeof env.created_at === 'number' ? env.created_at : null,
+    out_log_path: typeof env.pm_out_log_path === 'string' && env.pm_out_log_path ? env.pm_out_log_path : null,
+    err_log_path: typeof env.pm_err_log_path === 'string' && env.pm_err_log_path ? env.pm_err_log_path : null,
   };
 }
 
@@ -121,17 +126,42 @@ export function invalidatePm2Cache(): void {
   cache = null;
 }
 
+async function readTail(file: string, count: number): Promise<string[]> {
+  const result = await safeRun('tail', ['-n', String(count), file]);
+  if (result.code === 0 && result.stdout.trim()) {
+    return result.stdout.split('\n');
+  }
+  try {
+    const stat = fs.statSync(file);
+    if (stat.size > 50 * 1024 * 1024) return [];
+    const text = fs.readFileSync(file, 'utf-8');
+    return text.split('\n').filter((line) => line.trim() !== '');
+  } catch {
+    return [];
+  }
+}
+
 export async function getPm2Logs(target: string | number, lines = 200): Promise<Pm2LogsResponse> {
   const count = Math.min(Math.max(1, Math.floor(lines)), 2000);
-  const result = await safeRun('pm2', ['logs', String(target), '--lines', String(count), '--nostream', '--raw']);
-  if (result.code === -1) {
-    return { available: false, detail: 'PM2 no está instalado en este servidor.', lines: [] };
+  const list = await getPm2Processes();
+  if (!list.available) {
+    return { available: false, detail: list.detail, lines: [] };
   }
-  if (result.code !== 0) {
-    return { available: false, detail: result.stderr.trim() || 'El daemon de PM2 no responde.', lines: [] };
+  const wanted = String(target);
+  const process = list.processes.find((item) => String(item.id) === wanted || item.name === wanted);
+  if (!process) {
+    return { available: false, detail: `No existe el proceso PM2 «${wanted}».`, lines: [] };
   }
-  const text = `${result.stdout}${result.stderr}`.trim();
-  return { available: true, detail: '', lines: text ? text.split('\n') : [] };
+  const files = [process.out_log_path, process.err_log_path].filter((file): file is string => Boolean(file));
+  if (files.length === 0) {
+    return { available: false, detail: 'El proyecto no tiene archivos de log configurados.', lines: [] };
+  }
+  const chunks: string[] = [];
+  for (const file of files) {
+    if (!fs.existsSync(file)) continue;
+    chunks.push(...(await readTail(file, count)));
+  }
+  return { available: true, detail: '', lines: chunks.slice(-count) };
 }
 
 export function isPm2Action(action: string): action is Pm2Action {

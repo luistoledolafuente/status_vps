@@ -1,15 +1,15 @@
-// Página PM2: proyectos gestionados con PM2 (estado, métricas, logs y
-// acciones de reinicio/parada/arranque). Requiere que el backend corra con
-// el mismo usuario que gestiona PM2 en el servidor.
+// Página PM2: proyectos gestionados con PM2 (estado, métricas, logs en vivo
+// y acciones de reinicio/parada/arranque). Requiere que el backend corra
+// con el mismo usuario que gestiona PM2 en el servidor.
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button, Chip, Modal, useOverlayState } from "@heroui/react";
 import { api, ApiError } from "../api/client";
 import { Badge } from "../components/ui/Badge";
 import { Card } from "../components/ui/Card";
 import { EmptyState } from "../components/ui/EmptyState";
 import { Skeleton } from "../components/ui/Skeleton";
-import { formatBytes, formatPercent, formatUptime } from "../utils/format";
+import { formatBytes, formatPercent, formatUptime, formatTime } from "../utils/format";
 
 const STATUS_META = {
   online: { label: "Activo", chip: "success" },
@@ -97,7 +97,7 @@ function ProcessRow({ process, role, onLogs, onAction, busyKey, logsBusy }) {
       {role !== "admin" ? null : (
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
           <Button variant="secondary" size="sm" isDisabled={busy} onPress={() => onLogs(process)}>
-            Logs
+            Logs en vivo
           </Button>
           <Button
             variant="secondary"
@@ -132,45 +132,108 @@ function ProcessRow({ process, role, onLogs, onAction, busyKey, logsBusy }) {
   );
 }
 
-function LogsModal({ target, logs, onClose, onRefresh }) {
+function LogsModal({ target, onClose }) {
+  const id = target?.id != null ? String(target.id) : String(target?.name ?? "");
   const state = useOverlayState({
     defaultOpen: true,
     onOpenChange: (open) => {
       if (!open) onClose();
     },
   });
+  const [logs, setLogs] = useState({ loading: true });
+  const [stick, setStick] = useState(true);
+  const [refreshAt, setRefreshAt] = useState(null);
+  const preRef = useRef(null);
+
+  const fetchLogs = useCallback(async () => {
+    try {
+      const res = await api.pm2Logs({ id, lines: 400 });
+      setLogs(res);
+      setRefreshAt(new Date());
+    } catch (err) {
+      setLogs({ available: false, detail: err instanceof ApiError ? err.message : "No se pudieron leer los logs.", lines: [] });
+    }
+  }, [id]);
+
+  useEffect(() => {
+    void fetchLogs();
+    const timer = window.setInterval(() => void fetchLogs(), 2000);
+    return () => window.clearInterval(timer);
+  }, [fetchLogs]);
+
+  useEffect(() => {
+    if (stick && preRef.current) {
+      preRef.current.scrollTop = preRef.current.scrollHeight;
+    }
+  }, [logs?.lines?.length, logs?.loading, stick]);
+
+  const handleScroll = useCallback((event) => {
+    const el = event.currentTarget;
+    setStick(el.scrollHeight - el.scrollTop - el.clientHeight < 40);
+  }, []);
+
   return (
     <Modal state={state}>
-      <Modal.Backdrop />
-      <Modal.Container size="md">
-        <Modal.Dialog>
-          <Modal.Header>
-            <Modal.Heading>
-              Logs: {target?.name ?? "…"} {typeof target?.id === "number" ? ` · id ${target.id}` : ""}
-            </Modal.Heading>
-            <Modal.CloseTrigger />
-          </Modal.Header>
-          <Modal.Body>
-            {logs?.loading ? (
-              <Skeleton rows={6} />
-            ) : logs?.available && logs.lines.length > 0 ? (
-              <pre className="max-h-[24rem] overflow-auto whitespace-pre-wrap break-words rounded-lg bg-surface-secondary p-3 text-xs leading-relaxed text-foreground ring-1 ring-border">
-                {logs.lines.join("\n")}
-              </pre>
-            ) : (
-              <p className="text-sm text-muted">{logs?.detail || "Sin líneas de log."}</p>
-            )}
-          </Modal.Body>
-          <Modal.Footer>
-            <Button variant="secondary" size="sm" onPress={onRefresh}>
-              Refrescar
-            </Button>
-            <Button variant="primary" size="sm" onPress={onClose}>
-              Cerrar
-            </Button>
-          </Modal.Footer>
-        </Modal.Dialog>
-      </Modal.Container>
+      <Modal.Backdrop>
+        <Modal.Container placement="center" size="md" scroll="inside">
+          <Modal.Dialog>
+            <Modal.Header>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <Modal.Heading className="min-w-0">
+                  <span className="truncate">{target?.name ?? "…"}</span>
+                  {typeof target?.id === "number" ? <span className="text-muted"> · id {target.id}</span> : null}
+                </Modal.Heading>
+                <Chip color="success" variant="soft" size="sm" className="shrink-0">
+                  <span className="h-1.5 w-1.5 rounded-full bg-success status-pulse" />
+                  En vivo · cada 2 s
+                </Chip>
+              </div>
+              <Modal.CloseTrigger />
+            </Modal.Header>
+            <Modal.Body className="p-0">
+              {logs.loading && logs.lines?.length === 0 ? (
+                <Skeleton rows={8} />
+              ) : logs?.available && logs.lines.length > 0 ? (
+                <div className="relative">
+                  <pre
+                    ref={preRef}
+                    onScroll={handleScroll}
+                    className="max-h-[16rem] min-h-[16rem] overflow-y-auto overflow-x-auto whitespace-pre-wrap break-words rounded-lg bg-surface-secondary p-3 text-xs leading-relaxed text-foreground ring-1 ring-border sm:max-h-[60vh]"
+                  >
+                    {logs.lines.join("\n")}
+                  </pre>
+                  {!stick ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setStick(true);
+                        if (preRef.current) preRef.current.scrollTop = preRef.current.scrollHeight;
+                      }}
+                      className="absolute inset-x-0 bottom-1 mx-auto w-fit rounded-full bg-accent px-3 py-1 text-xs font-medium text-white shadow-lg ring-1 ring-black/10 transition hover:bg-accent/90"
+                    >
+                      ↓ Ir al final
+                    </button>
+                  ) : null}
+                </div>
+              ) : (
+                <p className="text-sm text-muted">{logs?.detail || "Sin líneas de log."}</p>
+              )}
+            </Modal.Body>
+            <Modal.Footer>
+              <span className="font-data text-xs text-muted">
+                {logs?.lines?.length != null ? `${logs.lines.length} líneas` : ""}
+                {refreshAt ? ` · ${formatTime(refreshAt)}` : ""}
+              </span>
+              <Button variant="secondary" size="sm" onPress={() => void fetchLogs()}>
+                Refrescar ahora
+              </Button>
+              <Button variant="primary" size="sm" onPress={onClose}>
+                Cerrar
+              </Button>
+            </Modal.Footer>
+          </Modal.Dialog>
+        </Modal.Container>
+      </Modal.Backdrop>
     </Modal>
   );
 }
@@ -184,35 +247,36 @@ function ActionConfirmModal({ confirm, error, busy, onCancel, onConfirm }) {
   });
   return (
     <Modal state={state}>
-      <Modal.Backdrop />
-      <Modal.Container size="sm">
-        <Modal.Dialog>
-          <Modal.Header>
-            <Modal.Heading>Confirmar acción</Modal.Heading>
-            <Modal.CloseTrigger />
-          </Modal.Header>
-          <Modal.Body>
-            <p className="text-sm text-foreground">
-              ¿Seguro que quieres <strong>{ACTION_VERB[confirm?.action] ?? "manejar"}</strong> el proyecto{" "}
-              <strong className="font-data">{confirm?.process?.name}</strong>?
-            </p>
-            <p className="mt-1 text-xs text-muted">
-              La acción se ejecuta con PM2 en el servidor; la tabla se actualizará automáticamente.
-            </p>
-            {error ? (
-              <p className="mt-2 rounded-lg bg-danger/10 px-3 py-2 text-xs text-danger ring-1 ring-danger/30">{error}</p>
-            ) : null}
-          </Modal.Body>
-          <Modal.Footer>
-            <Button variant="secondary" size="sm" isDisabled={Boolean(busy)} onPress={onCancel}>
-              Cancelar
-            </Button>
-            <Button variant="primary" size="sm" isLoading={Boolean(busy)} onPress={onConfirm}>
-              {ACTION_VERB[confirm?.action] && confirm ? `Sí, ${ACTION_VERB[confirm.action]}` : "Confirmar"}
-            </Button>
-          </Modal.Footer>
-        </Modal.Dialog>
-      </Modal.Container>
+      <Modal.Backdrop>
+        <Modal.Container placement="center" size="sm">
+          <Modal.Dialog>
+            <Modal.Header>
+              <Modal.Heading>Confirmar acción</Modal.Heading>
+              <Modal.CloseTrigger />
+            </Modal.Header>
+            <Modal.Body>
+              <p className="text-sm text-foreground">
+                ¿Seguro que quieres <strong>{ACTION_VERB[confirm?.action] ?? "manejar"}</strong> el proyecto{" "}
+                <strong className="font-data">{confirm?.process?.name}</strong>?
+              </p>
+              <p className="mt-1 text-xs text-muted">
+                La acción se ejecuta con PM2 en el servidor; la tabla se actualizará automáticamente.
+              </p>
+              {error ? (
+                <p className="mt-2 rounded-lg bg-danger/10 px-3 py-2 text-xs text-danger ring-1 ring-danger/30">{error}</p>
+              ) : null}
+            </Modal.Body>
+            <Modal.Footer>
+              <Button variant="secondary" size="sm" isDisabled={Boolean(busy)} onPress={onCancel}>
+                Cancelar
+              </Button>
+              <Button variant="primary" size="sm" isLoading={Boolean(busy)} onPress={onConfirm}>
+                {ACTION_VERB[confirm?.action] && confirm ? `Sí, ${ACTION_VERB[confirm.action]}` : "Confirmar"}
+              </Button>
+            </Modal.Footer>
+          </Modal.Dialog>
+        </Modal.Container>
+      </Modal.Backdrop>
     </Modal>
   );
 }
@@ -225,7 +289,6 @@ export function Pm2Page({ session }) {
   const [busy, setBusy] = useState(null);
   const [tick, setTick] = useState(0);
   const [logsTarget, setLogsTarget] = useState(null);
-  const [logs, setLogs] = useState(null);
   const [confirm, setConfirm] = useState(null);
   const [confirmError, setConfirmError] = useState(null);
 
@@ -250,17 +313,10 @@ export function Pm2Page({ session }) {
     void load();
   }, [tick]);
 
-  async function loadLogs(process) {
-    setLogsTarget(process);
-    setLogs({ loading: true });
-    try {
-      const targetId = process.id != null ? String(process.id) : process.name;
-      const res = await api.pm2Logs({ id: targetId });
-      setLogs(res);
-    } catch (err) {
-      setLogs({ available: false, detail: err instanceof ApiError ? err.message : "No se pudieron leer los logs.", lines: [] });
-    }
-  }
+  const handleAction = (process, action) => {
+    setConfirmError(null);
+    setConfirm({ process, action });
+  };
 
   async function applyAction(process, action) {
     setConfirm(null);
@@ -336,21 +392,15 @@ export function Pm2Page({ session }) {
               key={`${process.id ?? ""}-${process.name}`}
               process={process}
               role={session?.role}
-              onLogs={loadLogs}
-              onAction={(proc, action) => {
-                setConfirmError(null);
-                setConfirm({ process: proc, action });
-              }}
+              onLogs={setLogsTarget}
+              onAction={handleAction}
               busyKey={busy}
-              logsBusy={Boolean(logs?.loading)}
             />
           ))}
         </ul>
       )}
 
-      {logsTarget ? (
-        <LogsModal target={logsTarget} logs={logs} onClose={() => setLogsTarget(null)} onRefresh={() => loadLogs(logsTarget)} />
-      ) : null}
+      {logsTarget ? <LogsModal target={logsTarget} onClose={() => setLogsTarget(null)} /> : null}
 
       {confirm ? (
         <ActionConfirmModal
