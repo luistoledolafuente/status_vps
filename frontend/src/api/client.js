@@ -61,6 +61,14 @@ export const api = {
 
   services: () => request("/api/services"),
 
+  pm2: () => request("/api/pm2"),
+
+  pm2Logs: ({ id, lines = 200 } = {}) =>
+    request(`/api/pm2/logs/${encodeURIComponent(id)}?lines=${encodeURIComponent(lines)}`),
+
+  pm2Action: (id, action) =>
+    request(`/api/pm2/${encodeURIComponent(id)}/${encodeURIComponent(action)}`, { method: "POST" }),
+
   alerts: () => request("/api/alerts"),
 
   alertChannels: () => request("/api/alerts/channels"),

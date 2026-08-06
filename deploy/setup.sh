@@ -22,6 +22,12 @@ if grep -q '^SYSSTATUS_PORT=' .env; then
 else
     echo 'SYSSTATUS_PORT=8100' >> .env
 fi
+# Asegura autenticación activa (protege el panel y las acciones de PM2)
+if grep -q '^SYSSTATUS_AUTH_ENABLED=' .env; then
+    sed -i 's/^SYSSTATUS_AUTH_ENABLED=.*/SYSSTATUS_AUTH_ENABLED=true/' .env
+else
+    echo 'SYSSTATUS_AUTH_ENABLED=true' >> .env
+fi
 npm ci
 npm run build
 

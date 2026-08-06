@@ -9,6 +9,7 @@ import { Dashboard } from "./pages/Dashboard";
 import { ProcessesPage } from "./pages/ProcessesPage";
 import { ServicesPage } from "./pages/ServicesPage";
 import { AlertsPage } from "./pages/AlertsPage";
+import { Pm2Page } from "./pages/Pm2Page";
 import { LoginPage } from "./pages/LoginPage";
 import { clearSession, loadSession, SESSION_EXPIRED_EVENT } from "./auth/session";
 
@@ -16,6 +17,7 @@ const PAGES = {
   dashboard: Dashboard,
   processes: ProcessesPage,
   services: ServicesPage,
+  pm2: Pm2Page,
   alerts: AlertsPage,
 };
 
@@ -66,7 +68,7 @@ export default function App() {
           />
         ) : null}
 
-        <Page data={data} />
+        <Page data={data} session={session} />
       </main>
 
       <footer className="mx-auto max-w-7xl px-4 pb-8 sm:px-6">

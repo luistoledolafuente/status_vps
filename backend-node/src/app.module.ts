@@ -14,6 +14,7 @@ import { AppController, AuthController } from './controllers/app.controller';
 import { MetricsController } from './controllers/metrics.controller';
 import { ServicesController } from './controllers/services.controller';
 import { AlertsController } from './controllers/alerts.controller';
+import { Pm2Controller } from './controllers/pm2.controller';
 import { MetricsGateway } from './gateways/metrics.gateway';
 import { ResponseTimeMiddleware } from './middleware/response-time.middleware';
 
@@ -64,6 +65,7 @@ const collector = new MetricsCollector(settings, { warn: logger.warn }, history,
     MetricsController,
     ServicesController,
     AlertsController,
+    Pm2Controller,
   ],
   providers: [
     { provide: APP_GUARD, useClass: AuthGuard },

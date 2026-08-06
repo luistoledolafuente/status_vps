@@ -1,6 +1,6 @@
 # System Status
 
-Panel de monitoreo de servidores Linux en tiempo real: CPU, memoria, disco, red, tráfico mensual, servicios, procesos, detección de anomalías y **alertas por Telegram / correo / webhook**.
+Panel de monitoreo de servidores Linux en tiempo real: CPU, memoria, disco, red, tráfico mensual, servicios, procesos, **proyectos PM2 con logs y acciones**, detección de anomalías y **alertas por Telegram / correo / webhook**.
 
 - **Backend**: NestJS (TypeScript) + WebSocket → `backend-node/`
 - **Frontend**: React + Vite → `frontend/`
@@ -188,6 +188,7 @@ bash deploy/setup.sh
 | **Salud** | Score de anomalía (0-100) contra la línea base histórica |
 | **Disponibilidad** | Comprobaciones HTTP/TCP de tus servicios |
 | **Procesos** | Top de procesos por CPU o memoria |
+| **PM2** | Proyectos de PM2: estado, CPU, memoria, reinicios, uptime, **logs en vivo** y acciones de reinicio/parada/arranque (solo admin) |
 | **Servicios** | Estado de los servicios systemd |
 | **Alertas** | Canales de notificación con botones de prueba, umbrales, alertas activas y resueltas |
 
@@ -199,7 +200,7 @@ Las más importantes (hay otras en `.env.example`):
 
 | Variable | Default | Para qué es |
 |---|---|---|
-| `SYSSTATUS_AUTH_ENABLED` | `false` | Exigir sesión (JWT) en la API |
+| `SYSSTATUS_AUTH_ENABLED` | `true` | Exigir sesión (JWT) en la API (el deploy lo fuerza a `true`) |
 | `SYSSTATUS_ADMIN_PASSWORD` / `SYSSTATUS_VIEWER_PASSWORD` | `admin123` / `viewer123` | Contraseñas de acceso |
 | `SYSSTATUS_JWT_SECRET` | — | **Cambiar antes de activar auth** |
 | `SYSSTATUS_TELEGRAM_BOT_TOKEN` / `SYSSTATUS_TELEGRAM_CHAT_ID` | — | Bot de Telegram |
@@ -241,6 +242,9 @@ Las más importantes (hay otras en `.env.example`):
 | GET | `/api/metrics/processes?limit=12&sort_by=cpu` | Procesos |
 | GET | `/api/metrics/history?limit=200` | Histórico de gráficas |
 | GET | `/api/services` | Servicios |
+| GET | `/api/pm2` | Proyectos PM2 (estado y métricas) |
+| GET | `/api/pm2/logs/:id?lines=200` | Últimas líneas de logs de un proyecto |
+| POST | `/api/pm2/:id/restart` | Reiniciar (también `stop`, `start`; solo admin) |
 | GET | `/api/alerts` | Alertas y umbrales |
 | GET | `/api/alerts/channels` | Estado de canales |
 | GET | `/api/alerts/test` | Notificación de prueba a todos los canales |
