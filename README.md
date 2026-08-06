@@ -222,7 +222,7 @@ Las más importantes (hay otras en `.env.example`):
 | Página en blanco | Recarga con **Ctrl+Shift+R** (caché). |
 | `node: sqlite no disponible` | Necesitas Node.js 22+. |
 | Servicios "no disponible" | Activa systemd (WSL) o usa un Linux real. |
-| No conecta el WebSocket | Verifica que el backend esté en el puerto 8000; se reconecta solo. |
+| No conecta el WebSocket | Verifica que el backend esté en el puerto configurado (8100 en el VPS, 8000 en local); se reconecta solo. |
 | Con `AUTH_ENABLED=true` no conecta | Recarga y vuelve a iniciar sesión (token) y WS lleva `?token=...`. |
 | Las comprobaciones no aparecen | Revisa el formato de `SYSSTATUS_CHECKS` (`nombre=http://...` o `tcp://...`). |
 | Tráfico sin cuota | Pon `SYSSTATUS_TRAFFIC_QUOTA_GB`. |

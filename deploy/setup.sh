@@ -16,6 +16,12 @@ if [ ! -f .env ]; then
     cp .env.example .env
     echo "    (.env creado a partir de .env.example; ajusta los valores)"
 fi
+# Asegura SYSSTATUS_PORT=8100 (no pisa otros proyectos que usen 8000)
+if grep -q '^SYSSTATUS_PORT=' .env; then
+    sed -i 's/^SYSSTATUS_PORT=.*/SYSSTATUS_PORT=8100/' .env
+else
+    echo 'SYSSTATUS_PORT=8100' >> .env
+fi
 npm ci
 npm run build
 
@@ -24,7 +30,8 @@ sudo cp "$DEPLOY_DIR/sysstatus-backend.service" /etc/systemd/system/
 sudo sed -i "s|/home/rodrigo/project/vps/status_vps|$REPO_DIR|g" /etc/systemd/system/sysstatus-backend.service
 sudo sed -i "s/User=rodrigo/User=$RUN_USER/g" /etc/systemd/system/sysstatus-backend.service
 sudo systemctl daemon-reload
-sudo systemctl enable --now sysstatus-backend
+sudo systemctl enable sysstatus-backend
+sudo systemctl restart sysstatus-backend
 
 echo "==> Frontend: build"
 cd "$REPO_DIR/frontend"
